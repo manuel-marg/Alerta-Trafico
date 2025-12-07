@@ -388,6 +388,76 @@ app.delete('/routes/:id', async (req, res) => {
     }
 });
 
+// Ruta para la vista de monitoreo en vivo de una ruta
+app.get('/routes/:id/live', async (req, res) => {
+    try {
+        const routeId = parseInt(req.params.id);
+        const route = await db('rutas').where('id', routeId).first();
+        if (!route) {
+            return await handleErrorAndRender(res, null, 'Ruta no encontrada.', 'routes', { status: 404 });
+        }
+
+        const map = await db('mapas').where('id', route.mapa_id).first();
+        if (!map) {
+            return await handleErrorAndRender(res, null, 'Mapa asociado a la ruta no encontrado.', 'routes', { status: 404 });
+        }
+
+        res.render('index', {
+            screenshot: null,
+            error: null,
+            route,
+            map,
+            view: 'live'
+        });
+
+    } catch (error) {
+        await handleErrorAndRender(res, error, 'Error al cargar la vista en vivo.', 'routes');
+    }
+});
+
+// API para obtener el estado más reciente de una ruta
+app.get('/api/routes/:id/status', async (req, res) => {
+    try {
+        const routeId = parseInt(req.params.id);
+        const route = await db('rutas').where('id', routeId).first();
+        if (!route) {
+            return res.status(404).json({ error: 'Ruta no encontrada.' });
+        }
+
+        const map = await db('mapas').where('id', route.mapa_id).first();
+        if (!map) {
+            return res.status(404).json({ error: 'Mapa asociado no encontrado.' });
+        }
+
+        // Obtener las últimas 5 alertas para esta ruta
+        const latestAlerts = await db('alertas_trafico')
+            .where('ruta_id', routeId)
+            .orderBy('fecha_creacion', 'desc')
+            .limit(5);
+        
+        // Obtener todas las zonas de la ruta para mostrar su estado
+        const zones = await db('zonas').where('ruta_id', routeId).orderBy('orden');
+        
+        // Aquí podrías añadir lógica para obtener el estado actual de cada zona (con o sin tráfico)
+        // Por ahora, solo devolvemos la información básica.
+        
+        const liveScreenshotUrl = `/screenshots/live/map_${map.id}_latest.png`;
+
+        res.json({
+            route,
+            map,
+            liveScreenshotUrl,
+            latestAlerts,
+            zones
+        });
+
+    } catch (error) {
+        console.error('Error al obtener el estado de la ruta:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+});
+
+
 // Ruta para manejar la captura de pantalla
 app.post('/capture', async (req, res) => {
     const { name, url } = req.body; // Obtener también el nombre
@@ -461,10 +531,14 @@ app.post('/capture', async (req, res) => {
     }
 });
 
+const { startTrafficMonitor } = require('./traffic-monitor');
+
 // Inicializar la base de datos y luego iniciar el servidor
 initializeDatabase().then(() => {
     app.listen(port, () => {
         console.log(`Servidor escuchando en http://localhost:${port}`);
+        // Iniciar el monitor de tráfico después de que el servidor esté listo
+        startTrafficMonitor();
     });
 }).catch((err) => {
     console.error('Fallo al iniciar la aplicación debido a un error de DB:', err);

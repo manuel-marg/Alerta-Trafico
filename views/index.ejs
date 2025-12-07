@@ -352,7 +352,8 @@
                             <p><strong>Fecha de Creación:</strong> <%= new Date(route.fecha_creacion).toLocaleString() %></p>
 
                             <div class="action-buttons">
-                                <a href="/routes/<%= route.id %>/zones"><button class="btn-secondary">Ver/Gestionar Zonas</button></a>
+                                <a href="/routes/<%= route.id %>/zones"><button class="btn-secondary">Gestionar Zonas</button></a>
+                                <a href="/routes/<%= route.id %>/live"><button>Ver en Vivo</button></a>
 
                                 <form action="/routes/<%= route.id %>/edit" method="GET" style="display: inline;">
                                     <button type="submit" class="btn-secondary">Editar</button>
@@ -505,6 +506,79 @@
             </div>
 
             <a href="/routes"><button class="btn-secondary">Finalizar y Volver</button></a>
+        <% } %>
+
+        <!-- Vista de monitoreo en vivo -->
+        <% if (view === 'live') { %>
+            <h1>Monitoreo en Vivo: <%= route.nombre %></h1>
+            <p>Sentido: <strong><%= route.sentido %></strong></p>
+            <p>Mapa: <strong><%= map.nombre %></strong></p>
+            
+            <a href="/routes" class="btn-secondary" style="text-decoration: none; display: inline-block; margin-bottom: 1rem;">Volver a Rutas</a>
+
+            <div id="live-container">
+                <div class="map-image-container">
+                    <h3>Última Captura</h3>
+                    <img id="live-screenshot" src="" alt="Captura en vivo del mapa" style="max-width: 100%; border: 2px solid #007bff;"/>
+                    <p><small>Actualizado: <span id="last-updated">Nunca</span></small></p>
+                </div>
+                
+                <div class="alerts-section">
+                    <h3>Alertas de Tráfico Recientes</h3>
+                    <ul id="live-alerts-list">
+                        <li>Cargando alertas...</li>
+                    </ul>
+                </div>
+            </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const routeId = <%= route.id %>;
+                    const liveScreenshot = document.getElementById('live-screenshot');
+                    const lastUpdated = document.getElementById('last-updated');
+                    const liveAlertsList = document.getElementById('live-alerts-list');
+
+                    async function updateStatus() {
+                        try {
+                            const response = await fetch(`/api/routes/${routeId}/status`);
+                            if (!response.ok) {
+                                console.error('Error al obtener el estado de la ruta');
+                                return;
+                            }
+
+                            const data = await response.json();
+                            
+                            // Actualizar imagen (con timestamp para evitar caché)
+                            const timestamp = new Date().getTime();
+                            liveScreenshot.src = `${data.liveScreenshotUrl}?t=${timestamp}`;
+                            lastUpdated.textContent = new Date().toLocaleTimeString();
+
+                            // Actualizar lista de alertas
+                            liveAlertsList.innerHTML = ''; // Limpiar lista
+                            if (data.latestAlerts && data.latestAlerts.length > 0) {
+                                data.latestAlerts.forEach(alert => {
+                                    const li = document.createElement('li');
+                                    li.textContent = `[${new Date(alert.fecha_creacion).toLocaleString()}] ${alert.mensaje}`;
+                                    liveAlertsList.appendChild(li);
+                                });
+                            } else {
+                                const li = document.createElement('li');
+                                li.textContent = 'No hay alertas de tráfico recientes para esta ruta.';
+                                liveAlertsList.appendChild(li);
+                            }
+
+                        } catch (error) {
+                            console.error('Error en la función updateStatus:', error);
+                        }
+                    }
+
+                    // Actualizar inmediatamente al cargar la página
+                    updateStatus();
+
+                    // Y luego actualizar cada 5 segundos
+                    setInterval(updateStatus, 5000);
+                });
+            </script>
         <% } %>
 
         <% if (error) { %>

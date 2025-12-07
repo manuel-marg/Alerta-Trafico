@@ -90,6 +90,27 @@ async function initializeDatabase() {
         } else {
             console.log('La tabla "zonas" ya existe.');
         }
+
+        // Verificar si la tabla 'alertas_trafico' existe
+        const hasAlertsTable = await db.schema.hasTable('alertas_trafico');
+
+        if (!hasAlertsTable) {
+            // Crear la tabla 'alertas_trafico' si no existe
+            await db.schema.createTable('alertas_trafico', (table) => {
+                table.increments('id').primary(); // ID autoincremental
+                table.integer('ruta_id').unsigned().notNullable(); // Relación con tabla rutas
+                table.string('mensaje').notNullable(); // Mensaje descriptivo de la alerta
+                table.string('zona_inicio_nombre').notNullable(); // Nombre de la zona de inicio de la cola
+                table.string('zona_fin_nombre').notNullable(); // Nombre de la zona de fin de la cola
+                table.timestamp('fecha_creacion').defaultTo(db.fn.now()); // Fecha de creación
+
+                // Llave foránea
+                table.foreign('ruta_id').references('id').inTable('rutas').onDelete('CASCADE');
+            });
+            console.log('Tabla "alertas_trafico" creada exitosamente.');
+        } else {
+            console.log('La tabla "alertas_trafico" ya existe.');
+        }
     } catch (error) {
         console.error('Error al inicializar la base de datos:', error);
         process.exit(1); // Salir si hay un error crítico
