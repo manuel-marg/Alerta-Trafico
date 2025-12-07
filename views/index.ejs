@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Captura de Google Maps</title>
+    <title>Alerta Tráfico - Sistema de Gestión</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -18,28 +18,44 @@
         h1 {
             color: #0052cc;
         }
+        h2 {
+            color: #0052cc;
+            border-bottom: 2px solid #0052cc;
+            padding-bottom: 0.5rem;
+            margin-top: 2rem;
+        }
         .container {
             background-color: #ffffff;
             padding: 2rem;
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 800px;
+            max-width: 1000px;
             box-sizing: border-box;
         }
         form {
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            margin-bottom: 2rem;
         }
-        input[type="text"] {
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        label {
+            font-weight: bold;
+            color: #172b4d;
+        }
+        input[type="text"], input[type="url"] {
             padding: 0.75rem;
             border: 2px solid #dfe1e6;
             border-radius: 4px;
             font-size: 1rem;
             transition: border-color 0.2s;
         }
-        input[type="text"]:focus {
+        input[type="text"]:focus, input[type="url"]:focus {
             outline: none;
             border-color: #0052cc;
         }
@@ -52,8 +68,47 @@
             font-size: 1rem;
             cursor: pointer;
             transition: background-color 0.2s;
+            align-self: flex-start;
         }
         button:hover {
+            background-color: #0065ff;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .navigation {
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+        .nav-button {
+            padding: 0.5rem 1rem;
+            background-color: #e9ecef;
+            color: #495057;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .nav-button.active {
+            background-color: #0052cc;
+            color: white;
+        }
+        .nav-button:hover {
+            background-color: #dee2e6;
+        }
+        .nav-button.active:hover {
             background-color: #0065ff;
         }
         .screenshot-container {
@@ -74,34 +129,471 @@
             border-radius: 4px;
             border: 1px solid #ffbdad;
         }
+        .success {
+            color: #28a745;
+            margin-top: 1rem;
+            background-color: #d4edda;
+            padding: 0.75rem;
+            border-radius: 4px;
+            border: 1px solid #c3e6cb;
+        }
+        .map-item, .route-item {
+            background-color: #f9fbfd;
+            border: 1px solid #dfe1e6;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .map-item h3, .route-item h3 {
+            color: #0052cc;
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+        }
+        .map-item p, .route-item p {
+            margin-bottom: 0.5rem;
+        }
+        .map-item img, .route-item img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin-top: 1rem;
+            border: 1px solid #cccccc;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .zones-list {
+            margin-top: 1rem;
+            padding-left: 1.5rem;
+        }
+        .zones-list li {
+            margin-bottom: 0.5rem;
+        }
+        .map-image-container {
+            text-align: center;
+            margin: 1.5rem 0;
+        }
+        .map-image-container img {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        #mapCanvas {
+            max-width: 100%;
+            border: 2px solid #0052cc;
+            cursor: crosshair;
+        }
+        .coordinates-display {
+            margin: 1rem 0;
+            padding: 0.75rem;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .zone-form {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
-
     <div class="container">
-        <h1>Alerta Tráfico - Capturador de Mapas</h1>
-        <p>Introduce una URL de Google Maps para obtener una captura de pantalla.</p>
+        <!-- Navegación -->
+        <div class="navigation">
+            <button class="nav-button <%= (!view || view === 'home') ? 'active' : '' %>" onclick="location.href='/'">Inicio</button>
+            <button class="nav-button <%= (view === 'maps') ? 'active' : '' %>" onclick="location.href='/maps'">Gestión de Mapas</button>
+            <button class="nav-button <%= (view === 'routes') ? 'active' : '' %>" onclick="location.href='/routes'">Gestión de Rutas</button>
+        </div>
 
-        <form action="/capture" method="POST">
-            <label for="url">URL de Google Maps:</label>
-            <input type="text" id="url" name="url" placeholder="https://www.google.com/maps/..." required>
-            <button type="submit">Capturar Pantalla</button>
-        </form>
+        <!-- Vista principal: Captura de mapas -->
+        <% if (!view || view === 'home') { %>
+            <h1>Alerta Tráfico - Capturador de Mapas</h1>
+            <p>Introduce un nombre y una URL de Google Maps para guardar y capturar la pantalla.</p>
+
+            <form action="/capture" method="POST">
+                <div class="form-group">
+                    <label for="name">Nombre del Mapa:</label>
+                    <input type="text" id="name" name="name" placeholder="Ej: Mi Casa, Ruta al Trabajo" required>
+                </div>
+                <div class="form-group">
+                    <label for="url">URL de Google Maps:</label>
+                    <input type="url" id="url" name="url" placeholder="https://www.google.com/maps/..." required>
+                </div>
+                <button type="submit">Capturar y Guardar Mapa</button>
+            </form>
+
+            <div class="saved-maps">
+                <h2>Mapas Guardados:</h2>
+                <% if (maps && maps.length > 0) { %>
+                    <% maps.forEach(map => { %>
+                        <div class="map-item">
+                            <h3><%= map.nombre %></h3>
+                            <p><strong>URL:</strong> <a href="<%= map.url %>" target="_blank"><%= map.url %></a></p>
+                            <p><strong>Guardado:</strong> <%= new Date(map.fecha_creacion).toLocaleString() %></p>
+                            <% if (map.ruta_captura) { %>
+                                <img src="/<%= map.ruta_captura %>" alt="Captura de pantalla de <%= map.nombre %>">
+                            <% } else { %>
+                                <p>No hay captura disponible.</p>
+                            <% } %>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>Aún no hay mapas guardados. ¡Empieza a añadir uno!</p>
+                <% } %>
+            </div>
+        <% } %>
+
+        <!-- Vista de gestión de mapas -->
+        <% if (view === 'maps') { %>
+            <h1>Gestión de Mapas</h1>
+            <p>Aquí puedes crear, editar y eliminar mapas.</p>
+
+            <form action="/maps" method="POST">
+                <div class="form-group">
+                    <label for="mapName">Nombre del Mapa:</label>
+                    <input type="text" id="mapName" name="name" placeholder="Ej: Ruta Principal, Zona Centro" required>
+                </div>
+                <div class="form-group">
+                    <label for="mapUrl">URL de Google Maps:</label>
+                    <input type="url" id="mapUrl" name="url" placeholder="https://www.google.com/maps/..." required>
+                </div>
+                <button type="submit">Agregar Mapa</button>
+            </form>
+
+            <div class="saved-maps">
+                <h2>Mapas Existentes:</h2>
+                <% if (maps && maps.length > 0) { %>
+                    <% maps.forEach(map => { %>
+                        <div class="map-item">
+                            <h3><%= map.nombre %></h3>
+                            <p><strong>URL:</strong> <a href="<%= map.url %>" target="_blank"><%= map.url %></a></p>
+                            <p><strong>Guardado:</strong> <%= new Date(map.fecha_creacion).toLocaleString() %></p>
+                            <% if (map.ruta_captura) { %>
+                                <img src="/<%= map.ruta_captura %>" alt="Captura de pantalla de <%= map.nombre %>">
+                            <% } else { %>
+                                <p>No hay captura disponible.</p>
+                                <form action="/capture" method="POST" style="display: inline;">
+                                    <input type="hidden" name="name" value="<%= map.nombre %>">
+                                    <input type="hidden" name="url" value="<%= map.url %>">
+                                    <button type="submit">Capturar Ahora</button>
+                                </form>
+                            <% } %>
+                            <div class="action-buttons">
+                                <a href="/maps/<%= map.id %>/edit"><button class="btn-secondary">Editar</button></a>
+                                <form action="/maps/<%= map.id %>" method="POST" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este mapa? Esta acción también eliminará las rutas asociadas.')">
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn-danger">Eliminar</button>
+                                </form>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No hay mapas registrados aún.</p>
+                <% } %>
+            </div>
+        <% } %>
+
+        <!-- Vista de edición de mapas -->
+        <% if (view === 'edit-map') { %>
+            <h1>Editar Mapa</h1>
+            <p>Edita la información del mapa seleccionado.</p>
+
+            <form action="/maps/<%= map.id %>" method="POST">
+                <input type="hidden" name="_method" value="PUT">
+                <div class="form-group">
+                    <label for="editMapName">Nombre del Mapa:</label>
+                    <input type="text" id="editMapName" name="name" value="<%= map.nombre %>" required>
+                </div>
+                <div class="form-group">
+                    <label for="editMapUrl">URL de Google Maps:</label>
+                    <input type="url" id="editMapUrl" name="url" value="<%= map.url %>" required>
+                </div>
+                <button type="submit">Actualizar Mapa</button>
+                <a href="/maps"><button type="button" class="btn-secondary">Cancelar</button></a>
+            </form>
+        <% } %>
+
+        <!-- Vista de gestión de rutas -->
+        <% if (view === 'routes') { %>
+            <h1>Gestión de Rutas</h1>
+            <p>Administra las rutas en tus mapas. Selecciona un mapa y define zonas en él.</p>
+
+            <form action="/routes/create" method="GET">
+                <div class="form-group">
+                    <label for="selectMap">Selecciona un Mapa:</label>
+                    <select id="selectMap" name="mapId" required>
+                        <option value="">-- Selecciona un mapa --</option>
+                        <% if (maps && maps.length > 0) { %>
+                            <% maps.forEach(map => { %>
+                                <option value="<%= map.id %>"><%= map.nombre %></option>
+                            <% }) %>
+                        <% } else { %>
+                            <option value="">No hay mapas disponibles</option>
+                        <% } %>
+                    </select>
+                </div>
+                <button type="submit">Seleccionar Mapa</button>
+            </form>
+
+            <div class="routes-list">
+                <h2>Rutas Existentes:</h2>
+                <% if (routes && routes.length > 0) { %>
+                    <% routes.forEach(route => { %>
+                        <div class="route-item">
+                            <h3><%= route.nombre %></h3>
+                            <p><strong>Sentido:</strong> <%= route.sentido %></p>
+                            <p><strong>Mapa:</strong> <%= route.mapa_nombre %></p>
+                            <p><strong>Fecha de Creación:</strong> <%= new Date(route.fecha_creacion).toLocaleString() %></p>
+
+                            <div class="action-buttons">
+                                <a href="/routes/<%= route.id %>/zones"><button class="btn-secondary">Ver/Gestionar Zonas</button></a>
+
+                                <form action="/routes/<%= route.id %>/edit" method="GET" style="display: inline;">
+                                    <button type="submit" class="btn-secondary">Editar</button>
+                                </form>
+
+                                <form action="/routes/<%= route.id %>" method="POST" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar esta ruta? Se eliminarán todas las zonas asociadas.')">
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn-danger">Eliminar</button>
+                                </form>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <p>No hay rutas registradas aún.</p>
+                <% } %>
+            </div>
+        <% } %>
+
+        <!-- Vista de creación de rutas -->
+        <% if (view === 'create-route') { %>
+            <h1>Crear Nueva Ruta</h1>
+            <p>Define una nueva ruta en el mapa seleccionado.</p>
+
+            <form action="/routes" method="POST">
+                <input type="hidden" name="mapa_id" value="<%= selectedMap.id %>">
+                <div class="form-group">
+                    <label for="routeName">Nombre de la Ruta:</label>
+                    <input type="text" id="routeName" name="nombre" placeholder="Ej: Ruta Principal" required>
+                </div>
+                <div class="form-group">
+                    <label for="routeSentido">Sentido de la Ruta:</label>
+                    <input type="text" id="routeSentido" name="sentido" placeholder="Ej: Caracas, Guarenas" required>
+                </div>
+                <button type="submit">Crear Ruta y Definir Zonas</button>
+            </form>
+
+            <div class="map-image-container">
+                <h3>Mapa: <%= selectedMap.nombre %></h3>
+                <% if (selectedMap.ruta_captura) { %>
+                    <img src="/<%= selectedMap.ruta_captura %>" alt="Mapa de <%= selectedMap.nombre %>">
+                <% } else { %>
+                    <p>No hay captura disponible para este mapa.</p>
+                    <form action="/capture" method="POST">
+                        <input type="hidden" name="name" value="<%= selectedMap.nombre %>">
+                        <input type="hidden" name="url" value="<%= selectedMap.url %>">
+                        <button type="submit">Capturar Ahora</button>
+                    </form>
+                <% } %>
+            </div>
+        <% } %>
+
+        <!-- Vista de edición de rutas -->
+        <% if (view === 'edit-route') { %>
+            <h1>Editar Ruta</h1>
+            <p>Edita la información de la ruta seleccionada.</p>
+
+            <form action="/routes/<%= route.id %>" method="POST">
+                <input type="hidden" name="_method" value="PUT">
+                <div class="form-group">
+                    <label for="editRouteName">Nombre de la Ruta:</label>
+                    <input type="text" id="editRouteName" name="nombre" value="<%= route.nombre %>" required>
+                </div>
+                <div class="form-group">
+                    <label for="editRouteSentido">Sentido de la Ruta:</label>
+                    <input type="text" id="editRouteSentido" name="sentido" value="<%= route.sentido %>" required>
+                </div>
+                <div class="form-group">
+                    <label for="editRouteMapa">Mapa:</label>
+                    <select id="editRouteMapa" name="mapa_id" required>
+                        <% if (maps && maps.length > 0) { %>
+                            <% maps.forEach(map => { %>
+                                <option value="<%= map.id %>" <%= route.mapa_id == map.id ? 'selected' : '' %>><%= map.nombre %></option>
+                            <% }) %>
+                        <% } %>
+                    </select>
+                </div>
+                <button type="submit">Actualizar Ruta</button>
+                <a href="/routes"><button type="button" class="btn-secondary">Cancelar</button></a>
+            </form>
+        <% } %>
+
+        <!-- Vista de definición de zonas -->
+        <% if (view === 'define-zones') { %>
+            <h1>Definir Zonas en la Ruta</h1>
+            <p>Haz clic en la imagen para definir zonas en la ruta "<%= currentRoute.nombre %>" (Sentido: <%= currentRoute.sentido %>)</p>
+
+            <div class="map-image-container">
+                <% if (mapWithRoute.ruta_captura) { %>
+                    <img id="mapCanvas" src="/<%= mapWithRoute.ruta_captura %>" alt="Mapa de <%= mapWithRoute.nombre %>" onclick="getImageCoordinates(event)">
+                    <div class="coordinates-display" id="coordinatesDisplay">
+                        Haz clic en la imagen para obtener coordenadas
+                    </div>
+                <% } else { %>
+                    <p>No hay captura disponible para este mapa.</p>
+                <% } %>
+            </div>
+
+            <!-- Formulario para agregar zonas -->
+            <div class="zone-form">
+                <h3>Agregar Zona</h3>
+                <form id="zoneForm">
+                    <input type="hidden" id="rutaId" name="ruta_id" value="<%= currentRoute.id %>">
+                    <input type="hidden" id="originalWidth" name="originalWidth" value="<%= (typeof mapWithRoute !== 'undefined' && mapWithRoute) ? (mapWithRoute.original_width || 0) : 0 %>">
+                    <input type="hidden" id="originalHeight" name="originalHeight" value="<%= (typeof mapWithRoute !== 'undefined' && mapWithRoute) ? (mapWithRoute.original_height || 0) : 0 %>">
+                    <div class="form-group">
+                        <label for="zoneX">Coordenada X:</label>
+                        <input type="number" id="zoneX" name="x" readonly required>
+                        <input type="hidden" id="displayX" name="displayX">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneY">Coordenada Y:</label>
+                        <input type="number" id="zoneY" name="y" readonly required>
+                        <input type="hidden" id="displayY" name="displayY">
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneName">Nombre de la Zona:</label>
+                        <input type="text" id="zoneName" name="nombre" placeholder="Ej: Terrazas del Ávila" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="zoneOrder">Orden en la Ruta:</label>
+                        <input type="number" id="zoneOrder" name="orden" placeholder="Ej: 1, 2, 3..." required min="1">
+                    </div>
+                    <button type="submit">Agregar Zona</button>
+                </form>
+            </div>
+
+            <!-- Lista de zonas existentes -->
+            <div class="zones-section">
+                <h3>Zonas Definidas</h3>
+                <% if (zones && zones.length > 0) { %>
+                    <ul class="zones-list">
+                        <% zones.forEach(zone => { %>
+                            <li><strong><%= zone.nombre %></strong> en (<%= zone.x %>, <%= zone.y %>), orden: <%= zone.orden %>
+                                <form action="/zones/<%= zone.id %>" method="POST" style="display: inline;" onsubmit="return confirm('¿Estás seguro de que deseas eliminar esta zona?')">
+                                    <input type="hidden" name="_method" value="DELETE">
+                                    <button type="submit" class="btn-danger btn-sm">Eliminar</button>
+                                </form>
+                            </li>
+                        <% }) %>
+                    </ul>
+                <% } else { %>
+                    <p>No se han definido zonas para esta ruta aún.</p>
+                <% } %>
+            </div>
+
+            <a href="/routes"><button class="btn-secondary">Finalizar y Volver</button></a>
+        <% } %>
 
         <% if (error) { %>
             <div class="error">
                 <p><%= error %></p>
             </div>
         <% } %>
-
-        <% if (screenshot) { %>
-            <div class="screenshot-container">
-                <h2>Captura Realizada:</h2>
-                <img src="/<%= screenshot %>" alt="Captura de pantalla de Google Maps">
-                <p>Ruta: <%= screenshot %></p>
-            </div>
-        <% } %>
     </div>
 
+    <script>
+        // Función para obtener coordenadas de clic en imagen
+        function getImageCoordinates(e) {
+            const img = e.currentTarget;
+            const rect = img.getBoundingClientRect();
+            const displayX = Math.round(e.clientX - rect.left);
+            const displayY = Math.round(e.clientY - rect.top);
+
+            // Obtener dimensiones reales de la imagen (solo si estamos en la vista de definición de zonas)
+            <% if (typeof mapWithRoute !== 'undefined' && mapWithRoute) { %>
+            const originalWidth = <%= mapWithRoute.original_width || 0 %>;
+            const originalHeight = <%= mapWithRoute.original_height || 0 %>;
+            <% } else { %>
+            const originalWidth = 0;
+            const originalHeight = 0;
+            <% } %>
+
+            // Si no tenemos dimensiones reales, usar las dimensiones naturales de la imagen
+            let naturalWidth = img.naturalWidth;
+            let naturalHeight = img.naturalHeight;
+
+            // Si aún no tenemos dimensiones reales, usar dimensiones mostradas
+            if ((originalWidth === 0 || originalHeight === 0) && (naturalWidth === 0 || naturalHeight === 0)) {
+                naturalWidth = img.width;
+                naturalHeight = img.height;
+            } else if (originalWidth === 0 || originalHeight === 0) {
+                // Si no tenemos dimensiones reales guardadas, usar las naturales
+                document.getElementById('originalWidth').value = naturalWidth;
+                document.getElementById('originalHeight').value = naturalHeight;
+            } else {
+                // Usar dimensiones reales guardadas
+                naturalWidth = originalWidth;
+                naturalHeight = originalHeight;
+            }
+
+            // Obtener dimensiones mostradas
+            const displayedWidth = rect.width;
+            const displayedHeight = rect.height;
+
+            // Calcular proporción de escala
+            const scaleX = naturalWidth / displayedWidth;
+            const scaleY = naturalHeight / displayedHeight;
+
+            // Calcular coordenadas reales
+            const actualX = Math.round(displayX * scaleX);
+            const actualY = Math.round(displayY * scaleY);
+
+            // Actualizar campos
+            document.getElementById('displayX').value = displayX;
+            document.getElementById('displayY').value = displayY;
+            document.getElementById('zoneX').value = actualX;
+            document.getElementById('zoneY').value = actualY;
+            document.getElementById('coordinatesDisplay').innerHTML = `Coordenadas seleccionadas: X=${actualX}, Y=${actualY} (X display:${displayX}, Y display:${displayY})`;
+        }
+
+        // Manejar el envío del formulario de zona
+        document.getElementById('zoneForm')?.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const zoneData = Object.fromEntries(formData);
+
+            // Solo enviar las coordenadas reales, no las de pantalla
+            delete zoneData.displayX;
+            delete zoneData.displayY;
+
+            try {
+                const response = await fetch('/zones', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(zoneData)
+                });
+
+                if (response.ok) {
+                    // Recargar la página para mostrar la zona recién agregada
+                    location.reload();
+                } else {
+                    alert('Error al agregar la zona');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error de conexión al agregar la zona');
+            }
+        });
+    </script>
 </body>
 </html>
