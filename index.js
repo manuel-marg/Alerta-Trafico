@@ -8,6 +8,47 @@ const { db, initializeDatabase } = require('./database'); // Importar db y initi
 const app = express();
 const port = 3000;
 
+// Función auxiliar para manejar errores y renderizar la vista
+async function handleErrorAndRender(res, error, message, view, data = {}) {
+    console.error(message, error);
+    try {
+        // Intentar obtener los mapas de nuevo si no se proporcionaron, ya que muchas vistas los necesitan
+        if (!data.maps) {
+            data.maps = await db('mapas').select('*');
+        }
+    } catch (dbError) {
+        console.error('Error adicional al obtener mapas en el manejador de errores:', dbError);
+        data.maps = []; // Asegurar que maps sea un array vacío si falla
+    }
+    res.render('index', {
+        screenshot: null,
+        error: message,
+        view: view,
+        ...data // Incluir cualquier otro dato necesario para la vista
+    });
+}
+
+// Funciones de utilidad para validación
+function validateMapData(name, url) {
+    if (!name || name.trim() === '') {
+        return 'Por favor, introduce un nombre para el mapa.';
+    }
+    if (!url || !url.startsWith('https://www.google.com/maps')) {
+        return 'Por favor, introduce una URL válida de Google Maps.';
+    }
+    return null; // No hay errores
+}
+
+function validateRouteData(nombre, sentido) {
+    if (!nombre || nombre.trim() === '') {
+        return 'Por favor, introduce un nombre para la ruta.';
+    }
+    if (!sentido || sentido.trim() === '') {
+        return 'Por favor, introduce el sentido de la ruta.';
+    }
+    return null; // No hay errores
+}
+
 // Configurar EJS como motor de plantillas
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -31,8 +72,7 @@ app.get('/', async (req, res) => {
         const maps = await db('mapas').select('*'); // Obtener todos los mapas
         res.render('index', { screenshot: null, error: null, maps, view: 'home' }); // Pasar los mapas a la vista
     } catch (error) {
-        console.error('Error al obtener los mapas:', error);
-        res.render('index', { screenshot: null, error: 'Error al cargar los mapas.', maps: [], view: 'home' });
+        await handleErrorAndRender(res, error, 'Error al cargar los mapas.', 'home');
     }
 });
 
@@ -42,8 +82,7 @@ app.get('/maps', async (req, res) => {
         const maps = await db('mapas').select('*');
         res.render('index', { screenshot: null, error: null, maps, view: 'maps' });
     } catch (error) {
-        console.error('Error al obtener los mapas:', error);
-        res.render('index', { screenshot: null, error: 'Error al cargar los mapas.', maps: [], view: 'maps' });
+        await handleErrorAndRender(res, error, 'Error al cargar los mapas.', 'maps');
     }
 });
 
@@ -51,44 +90,9 @@ app.get('/maps', async (req, res) => {
 app.post('/maps', async (req, res) => {
     const { name, url } = req.body;
 
-    if (!name || name.trim() === '') {
-        try {
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa.',
-                maps,
-                view: 'maps'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de nombre:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa. (Error al cargar mapas)',
-                maps: [],
-                view: 'maps'
-            });
-        }
-    }
-
-    if (!url || !url.startsWith('https://www.google.com/maps')) {
-        try {
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps.',
-                maps,
-                view: 'maps'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de URL:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps. (Error al cargar mapas)',
-                maps: [],
-                view: 'maps'
-            });
-        }
+    const validationError = validateMapData(name, url);
+    if (validationError) {
+        return await handleErrorAndRender(res, null, validationError, 'maps');
     }
 
     try {
@@ -104,24 +108,7 @@ app.post('/maps', async (req, res) => {
 
         res.redirect('/maps');
     } catch (error) {
-        console.error('Error al guardar el mapa en DB:', error);
-        try {
-            const maps = await db('mapas').select('*');
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al guardar el mapa. Inténtalo de nuevo.',
-                maps,
-                view: 'maps'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas después de un error de captura:', dbError);
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al guardar el mapa. (Error al cargar mapas)',
-                maps: [],
-                view: 'maps'
-            });
-        }
+        await handleErrorAndRender(res, error, 'Ocurrió un error al guardar el mapa. Inténtalo de nuevo.', 'maps');
     }
 });
 
@@ -130,22 +117,14 @@ app.get('/maps/:id/edit', async (req, res) => {
     try {
         const mapId = parseInt(req.params.id);
         const map = await db('mapas').where('id', mapId).first();
-        const maps = await db('mapas').select('*');
 
         if (!map) {
-            return res.status(404).render('index', {
-                screenshot: null,
-                error: 'Mapa no encontrado.',
-                maps: maps,
-                view: 'maps'
-            });
+            return await handleErrorAndRender(res, null, 'Mapa no encontrado.', 'maps', { status: 404 });
         }
 
         res.render('index', { screenshot: null, error: null, map, maps, view: 'edit-map' });
     } catch (error) {
-        console.error('Error al obtener el mapa para edición:', error);
-        const maps = await db('mapas').select('*');
-        res.render('index', { screenshot: null, error: 'Error al cargar el mapa para edición.', maps: [], view: 'maps' });
+        await handleErrorAndRender(res, error, 'Error al cargar el mapa para edición.', 'maps');
     }
 });
 
@@ -154,50 +133,19 @@ app.put('/maps/:id', async (req, res) => {
     const mapId = parseInt(req.params.id);
     const { name, url } = req.body;
 
-    if (!name || name.trim() === '') {
-        try {
-            const existingMap = await db('mapas').where('id', mapId).first();
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa.',
-                map: existingMap,
-                maps,
-                view: 'edit-map'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de nombre:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa. (Error al cargar mapas)',
-                map: null,
-                maps: [],
-                view: 'maps'
-            });
+    let existingMap;
+    try {
+        existingMap = await db('mapas').where('id', mapId).first();
+        if (!existingMap) {
+            return await handleErrorAndRender(res, null, 'Mapa no encontrado para actualizar.', 'maps', { status: 404 });
         }
+    } catch (error) {
+        return await handleErrorAndRender(res, error, 'Error al obtener el mapa para actualización.', 'maps');
     }
 
-    if (!url || !url.startsWith('https://www.google.com/maps')) {
-        try {
-            const existingMap = await db('mapas').where('id', mapId).first();
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps.',
-                map: existingMap,
-                maps,
-                view: 'edit-map'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de URL:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps. (Error al cargar mapas)',
-                map: null,
-                maps: [],
-                view: 'maps'
-            });
-        }
+    const validationError = validateMapData(name, url);
+    if (validationError) {
+        return await handleErrorAndRender(res, null, validationError, 'edit-map', { map: existingMap });
     }
 
     try {
@@ -210,27 +158,7 @@ app.put('/maps/:id', async (req, res) => {
 
         res.redirect('/maps');
     } catch (error) {
-        console.error('Error al actualizar el mapa:', error);
-        try {
-            const existingMap = await db('mapas').where('id', mapId).first();
-            const maps = await db('mapas').select('*');
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al actualizar el mapa. Inténtalo de nuevo.',
-                map: existingMap,
-                maps,
-                view: 'edit-map'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas después de un error de actualización:', dbError);
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al actualizar el mapa. (Error al cargar mapas)',
-                map: null,
-                maps: [],
-                view: 'maps'
-            });
-        }
+        await handleErrorAndRender(res, error, 'Ocurrió un error al actualizar el mapa. Inténtalo de nuevo.', 'edit-map', { map: existingMap });
     }
 });
 
@@ -251,9 +179,7 @@ app.delete('/maps/:id', async (req, res) => {
 
         res.redirect('/maps');
     } catch (error) {
-        console.error('Error al eliminar el mapa:', error);
-        const maps = await db('mapas').select('*');
-        res.render('index', { screenshot: null, error: 'Error al eliminar el mapa.', maps: [], view: 'maps' });
+        await handleErrorAndRender(res, error, 'Error al eliminar el mapa.', 'maps');
     }
 });
 
@@ -267,9 +193,7 @@ app.get('/routes', async (req, res) => {
 
         res.render('index', { screenshot: null, error: null, maps, routes, view: 'routes' });
     } catch (error) {
-        console.error('Error al obtener las rutas:', error);
-        const maps = await db('mapas').select('*');
-        res.render('index', { screenshot: null, error: 'Error al cargar las rutas.', maps: [], routes: [], view: 'routes' });
+        await handleErrorAndRender(res, error, 'Error al cargar las rutas.', 'routes', { routes: [] });
     }
 });
 
@@ -278,22 +202,14 @@ app.get('/routes/create', async (req, res) => {
     try {
         const mapId = parseInt(req.query.mapId);
         const selectedMap = await db('mapas').where('id', mapId).first();
-        const maps = await db('mapas').select('*');
 
         if (!selectedMap) {
-            return res.status(404).render('index', {
-                screenshot: null,
-                error: 'Mapa no encontrado.',
-                maps,
-                view: 'routes'
-            });
+            return await handleErrorAndRender(res, null, 'Mapa no encontrado.', 'routes', { status: 404 });
         }
 
-        res.render('index', { screenshot: null, error: null, selectedMap, maps, view: 'create-route' });
+        res.render('index', { screenshot: null, error: null, selectedMap, view: 'create-route' });
     } catch (error) {
-        console.error('Error al obtener el mapa para crear ruta:', error);
-        const maps = await db('mapas').select('*');
-        res.render('index', { screenshot: null, error: 'Error al cargar el mapa para crear ruta.', maps: [], view: 'routes' });
+        await handleErrorAndRender(res, error, 'Error al cargar el mapa para crear ruta.', 'routes');
     }
 });
 
@@ -301,50 +217,19 @@ app.get('/routes/create', async (req, res) => {
 app.post('/routes', async (req, res) => {
     const { nombre, sentido, mapa_id } = req.body;
 
-    if (!nombre || nombre.trim() === '') {
-        try {
-            const selectedMap = await db('mapas').where('id', mapa_id).first();
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para la ruta.',
-                selectedMap,
-                maps,
-                view: 'create-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de nombre de ruta:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para la ruta. (Error al cargar mapas)',
-                selectedMap: null,
-                maps: [],
-                view: 'routes'
-            });
+    let selectedMap;
+    try {
+        selectedMap = await db('mapas').where('id', parseInt(mapa_id)).first();
+        if (!selectedMap) {
+            return await handleErrorAndRender(res, null, 'Mapa seleccionado no encontrado.', 'routes', { status: 404 });
         }
+    } catch (error) {
+        return await handleErrorAndRender(res, error, 'Error al obtener el mapa seleccionado.', 'routes');
     }
 
-    if (!sentido || sentido.trim() === '') {
-        try {
-            const selectedMap = await db('mapas').where('id', mapa_id).first();
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce el sentido de la ruta.',
-                selectedMap,
-                maps,
-                view: 'create-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de sentido de ruta:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce el sentido de la ruta. (Error al cargar mapas)',
-                selectedMap: null,
-                maps: [],
-                view: 'routes'
-            });
-        }
+    const validationError = validateRouteData(nombre, sentido);
+    if (validationError) {
+        return await handleErrorAndRender(res, null, validationError, 'create-route', { selectedMap });
     }
 
     try {
@@ -358,27 +243,7 @@ app.post('/routes', async (req, res) => {
         // Redirigir a la página de definición de zonas para esta ruta
         res.redirect(`/routes/${routeId}/zones`);
     } catch (error) {
-        console.error('Error al crear la ruta:', error);
-        try {
-            const selectedMap = await db('mapas').where('id', mapa_id).first();
-            const maps = await db('mapas').select('*');
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al crear la ruta. Inténtalo de nuevo.',
-                selectedMap,
-                maps,
-                view: 'create-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas después de un error de creación de ruta:', dbError);
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al crear la ruta. (Error al cargar mapas)',
-                selectedMap: null,
-                maps: [],
-                view: 'routes'
-            });
-        }
+        await handleErrorAndRender(res, error, 'Ocurrió un error al crear la ruta. Inténtalo de nuevo.', 'create-route', { selectedMap });
     }
 });
 
@@ -389,18 +254,12 @@ app.get('/routes/:id/zones', async (req, res) => {
         const currentRoute = await db('rutas').where('id', routeId).first();
 
         if (!currentRoute) {
-            const maps = await db('mapas').select('*');
-            return res.status(404).render('index', {
-                screenshot: null,
-                error: 'Ruta no encontrada.',
-                maps,
-                view: 'routes'
-            });
+            return await handleErrorAndRender(res, null, 'Ruta no encontrada.', 'routes', { status: 404 });
         }
 
         const mapWithRoute = await db('mapas').where('id', currentRoute.mapa_id).first();
         const zones = await db('zonas').where('ruta_id', routeId).orderBy('orden');
-        const maps = await db('mapas').select('*');
+        // maps es gestionado por handleErrorAndRender si no existe en data
 
         res.render('index', {
             screenshot: null,
@@ -408,18 +267,10 @@ app.get('/routes/:id/zones', async (req, res) => {
             currentRoute,
             mapWithRoute,
             zones,
-            maps,
             view: 'define-zones'
         });
     } catch (error) {
-        console.error('Error al obtener la ruta y sus zonas:', error);
-        const maps = await db('mapas').select('*');
-        res.render('index', {
-            screenshot: null,
-            error: 'Error al cargar la ruta y sus zonas.',
-            maps: [],
-            view: 'routes'
-        });
+        await handleErrorAndRender(res, error, 'Error al cargar la ruta y sus zonas.', 'routes');
     }
 });
 
@@ -462,21 +313,10 @@ app.get('/routes/:id/edit', async (req, res) => {
         const route = await db('rutas').where('id', routeId).first();
 
         if (!route) {
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            return res.status(404).render('index', {
-                screenshot: null,
-                error: 'Ruta no encontrada.',
-                maps,
-                routes: allRoutes,
-                view: 'routes'
-            });
+            return await handleErrorAndRender(res, null, 'Ruta no encontrada.', 'routes', { status: 404 });
         }
 
-        const maps = await db('mapas').select('*');
+        const maps = await db('mapas').select('*'); // maps is needed for the dropdown in the edit form
 
         res.render('index', {
             screenshot: null,
@@ -486,19 +326,7 @@ app.get('/routes/:id/edit', async (req, res) => {
             view: 'edit-route'
         });
     } catch (error) {
-        console.error('Error al obtener la ruta para edición:', error);
-        const maps = await db('mapas').select('*');
-        const allRoutes = await db('rutas')
-            .select('rutas.*', 'mapas.nombre as mapa_nombre')
-            .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-        res.render('index', {
-            screenshot: null,
-            error: 'Error al cargar la ruta para edición.',
-            maps,
-            routes: allRoutes,
-            view: 'routes'
-        });
+        await handleErrorAndRender(res, error, 'Error al cargar la ruta para edición.', 'routes');
     }
 });
 
@@ -507,70 +335,30 @@ app.put('/routes/:id', async (req, res) => {
     const routeId = parseInt(req.params.id);
     const { nombre, sentido, mapa_id } = req.body;
 
-    if (!nombre || nombre.trim() === '') {
-        try {
-            const route = await db('rutas').where('id', routeId).first();
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para la ruta.',
-                route,
-                maps,
-                routes: allRoutes,
-                view: 'edit-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los datos para el error de edición de ruta:', dbError);
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para la ruta. (Error al cargar datos)',
-                maps,
-                routes: allRoutes,
-                view: 'routes'
-            });
+    let route;
+    try {
+        route = await db('rutas').where('id', routeId).first();
+        if (!route) {
+            return await handleErrorAndRender(res, null, 'Ruta no encontrada para actualizar.', 'routes', { status: 404 });
         }
+    } catch (error) {
+        return await handleErrorAndRender(res, error, 'Error al obtener la ruta para actualización.', 'routes');
     }
 
-    if (!sentido || sentido.trim() === '') {
-        try {
-            const route = await db('rutas').where('id', routeId).first();
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
+    const validationError = validateRouteData(nombre, sentido);
+    if (validationError) {
+        return await handleErrorAndRender(res, null, validationError, 'edit-route', { route });
+    }
 
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce el sentido de la ruta.',
-                route,
-                maps,
-                routes: allRoutes,
-                view: 'edit-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los datos para el error de edición de ruta:', dbError);
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce el sentido de la ruta. (Error al cargar datos)',
-                maps,
-                routes: allRoutes,
-                view: 'routes'
-            });
+    // Opcional: Verificar que el mapa_id sea válido si es crítico para la integridad
+    let selectedMap;
+    try {
+        selectedMap = await db('mapas').where('id', parseInt(mapa_id)).first();
+        if (!selectedMap) {
+            return await handleErrorAndRender(res, null, 'El mapa seleccionado no es válido.', 'edit-route', { route });
         }
+    } catch (error) {
+        return await handleErrorAndRender(res, error, 'Error al verificar el mapa asociado.', 'edit-route', { route });
     }
 
     try {
@@ -584,37 +372,7 @@ app.put('/routes/:id', async (req, res) => {
 
         res.redirect('/routes');
     } catch (error) {
-        console.error('Error al actualizar la ruta:', error);
-        try {
-            const route = await db('rutas').where('id', routeId).first();
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al actualizar la ruta. Inténtalo de nuevo.',
-                route,
-                maps,
-                routes: allRoutes,
-                view: 'edit-route'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los datos después de un error de actualización de ruta:', dbError);
-            const maps = await db('mapas').select('*');
-            const allRoutes = await db('rutas')
-                .select('rutas.*', 'mapas.nombre as mapa_nombre')
-                .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al actualizar la ruta. (Error al cargar datos)',
-                maps,
-                routes: allRoutes,
-                view: 'routes'
-            });
-        }
+        await handleErrorAndRender(res, error, 'Ocurrió un error al actualizar la ruta. Inténtalo de nuevo.', 'edit-route', { route });
     }
 });
 
@@ -626,19 +384,7 @@ app.delete('/routes/:id', async (req, res) => {
 
         res.redirect('/routes');
     } catch (error) {
-        console.error('Error al eliminar la ruta:', error);
-        const maps = await db('mapas').select('*');
-        const allRoutes = await db('rutas')
-            .select('rutas.*', 'mapas.nombre as mapa_nombre')
-            .join('mapas', 'rutas.mapa_id', 'mapas.id');
-
-        res.render('index', {
-            screenshot: null,
-            error: 'Error al eliminar la ruta.',
-            maps,
-            routes: allRoutes,
-            view: 'routes'
-        });
+        await handleErrorAndRender(res, error, 'Error al eliminar la ruta.', 'routes');
     }
 });
 
@@ -646,44 +392,9 @@ app.delete('/routes/:id', async (req, res) => {
 app.post('/capture', async (req, res) => {
     const { name, url } = req.body; // Obtener también el nombre
 
-    if (!name || name.trim() === '') {
-        try {
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa.',
-                maps,
-                view: 'home'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de nombre:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce un nombre para el mapa. (Error al cargar mapas)',
-                maps: [],
-                view: 'home'
-            });
-        }
-    }
-
-    if (!url || !url.startsWith('https://www.google.com/maps')) {
-        try {
-            const maps = await db('mapas').select('*');
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps.',
-                maps,
-                view: 'home'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas para el error de URL:', dbError);
-            return res.render('index', {
-                screenshot: null,
-                error: 'Por favor, introduce una URL válida de Google Maps. (Error al cargar mapas)',
-                maps: [],
-                view: 'home'
-            });
-        }
+    const validationError = validateMapData(name, url);
+    if (validationError) {
+        return await handleErrorAndRender(res, null, validationError, 'home');
     }
 
     try {
@@ -746,24 +457,7 @@ app.post('/capture', async (req, res) => {
         res.redirect('/'); // Redirigir a la página principal después de guardar
 
     } catch (error) {
-        console.error('Error al capturar la pantalla o guardar en DB:', error);
-        try {
-            const maps = await db('mapas').select('*');
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al procesar la URL o guardar el mapa. Inténtalo de nuevo.',
-                maps,
-                view: 'home'
-            });
-        } catch (dbError) {
-            console.error('Error al obtener los mapas después de un error de captura:', dbError);
-            res.render('index', {
-                screenshot: null,
-                error: 'Ocurrió un error al procesar la URL o guardar el mapa. (Error al cargar mapas)',
-                maps: [],
-                view: 'home'
-            });
-        }
+        await handleErrorAndRender(res, error, 'Ocurrió un error al procesar la URL o guardar el mapa. Inténtalo de nuevo.', 'home');
     }
 });
 

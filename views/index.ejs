@@ -450,6 +450,12 @@
                 <% } %>
             </div>
 
+            <!-- Contenedor del color del píxel -->
+            <div id="pixel-color-container" style="position: absolute; display: none; z-index: 1000; pointer-events: none;">
+                <div id="pixel-color-display" style="width: 30px; height: 30px; border: 2px solid white; border-radius: 4px; box-shadow: 0 0 5px rgba(0,0,0,0.5);"></div>
+                <div id="pixel-color-value" style="font-family: monospace; font-size: 12px; color: white; background: rgba(0,0,0,0.7); padding: 2px 5px; border-radius: 3px; margin-top: 2px;"></div>
+            </div>
+
             <!-- Formulario para agregar zonas -->
             <div class="zone-form">
                 <h3>Agregar Zona</h3>
@@ -509,6 +515,84 @@
     </div>
 
     <script>
+        // Variables para la funcionalidad de detección de color de píxel
+        let pixelColorContainer = document.getElementById('pixel-color-container');
+        let pixelColorDisplay = document.getElementById('pixel-color-display');
+        let pixelColorValue = document.getElementById('pixel-color-value');
+
+        // Función para obtener el color del píxel bajo el cursor
+        function getPixelColor(img, x, y) {
+            // Crear un canvas temporal para leer el color del píxel
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+
+            ctx.drawImage(img, 0, 0);
+
+            // Obtener los datos del píxel
+            const pixel = ctx.getImageData(x, y, 1, 1).data;
+
+            // Convertir a color hexadecimal
+            const hex = "#" + ((1 << 24) + (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]).toString(16).slice(1);
+
+            return {
+                rgb: `rgb(${pixel[0]}, ${pixel[1]}, ${pixel[2]})`,
+                hex: hex,
+                r: pixel[0],
+                g: pixel[1],
+                b: pixel[2]
+            };
+        }
+
+        // Función para inicializar la detección de color
+        function setupPixelDetector(img) {
+            // Asegurarse de que la imagen esté completamente cargada
+            if (!img.complete) {
+                img.onload = function() {
+                    attachEventListeners(img);
+                };
+            } else {
+                attachEventListeners(img);
+            }
+        }
+
+        function attachEventListeners(img) {
+            img.addEventListener('mousemove', function(e) {
+                if (e.target.id === 'mapCanvas') {  // Solo activar en el canvas del mapa
+                    const rect = img.getBoundingClientRect();
+                    // Calcular la posición relativa al canvas
+                    const scaleX = img.naturalWidth / img.width;
+                    const scaleY = img.naturalHeight / img.height;
+
+                    const mouseX = Math.floor((e.clientX - rect.left) * scaleX);
+                    const mouseY = Math.floor((e.clientY - rect.top) * scaleY);
+
+                    // Verificar que estemos dentro de la imagen original
+                    if (mouseX >= 0 && mouseX < img.naturalWidth && mouseY >= 0 && mouseY < img.naturalHeight) {
+                        // Actualizar posición del contenedor
+                        pixelColorContainer.style.display = 'block';
+                        pixelColorContainer.style.left = (rect.left + img.width + 10) + 'px';
+                        pixelColorContainer.style.top = (rect.top + 10) + 'px';
+
+                        try {
+                            // Obtener y mostrar el color del píxel
+                            const pixelColor = getPixelColor(img, mouseX, mouseY);
+                            pixelColorDisplay.style.backgroundColor = pixelColor.hex;
+                            pixelColorValue.textContent = pixelColor.hex;
+                        } catch (error) {
+                            console.log('Error al obtener color del píxel:', error);
+                        }
+                    }
+                }
+            });
+
+            img.addEventListener('mouseleave', function() {
+                pixelColorContainer.style.display = 'none';
+            });
+        }
+
         // Función para obtener coordenadas de clic en imagen
         function getImageCoordinates(e) {
             const img = e.currentTarget;
@@ -561,6 +645,9 @@
             document.getElementById('zoneX').value = actualX;
             document.getElementById('zoneY').value = actualY;
             document.getElementById('coordinatesDisplay').innerHTML = `Coordenadas seleccionadas: X=${actualX}, Y=${actualY} (X display:${displayX}, Y display:${displayY})`;
+
+            // Ocultar la visualización de color temporalmente al hacer clic
+            pixelColorContainer.style.display = 'none';
         }
 
         // Manejar el envío del formulario de zona
@@ -592,6 +679,23 @@
             } catch (error) {
                 console.error('Error:', error);
                 alert('Error de conexión al agregar la zona');
+            }
+        });
+
+        // Inicializar la funcionalidad de detección de color si estamos en la vista de definición de zonas
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof currentRoute !== 'undefined' && currentRoute) {
+                const mapCanvas = document.getElementById('mapCanvas');
+                if (mapCanvas) {
+                    // Asegurarnos de que la imagen haya cargado
+                    if (mapCanvas.complete) {
+                        setupPixelDetector(mapCanvas);
+                    } else {
+                        mapCanvas.addEventListener('load', function() {
+                            setupPixelDetector(mapCanvas);
+                        });
+                    }
+                }
             }
         });
     </script>
