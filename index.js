@@ -419,15 +419,9 @@ app.get('/routes/:id/live', async (req, res) => {
 app.get('/api/routes/:id/status', async (req, res) => {
     try {
         const routeId = parseInt(req.params.id);
-        const route = await db('rutas').where('id', routeId).first();
-        if (!route) {
-            return res.status(404).json({ error: 'Ruta no encontrada.' });
-        }
-
-        const map = await db('mapas').where('id', route.mapa_id).first();
-        if (!map) {
-            return res.status(404).json({ error: 'Mapa asociado no encontrado.' });
-        }
+        
+        // Obtener el estado detallado de las zonas desde el caché del monitor
+        const zonasAnalizadas = getEstadoRuta(routeId) || [];
 
         // Obtener las últimas 5 alertas para esta ruta
         const latestAlerts = await db('alertas_trafico')
@@ -435,20 +429,18 @@ app.get('/api/routes/:id/status', async (req, res) => {
             .orderBy('fecha_creacion', 'desc')
             .limit(5);
         
-        // Obtener todas las zonas de la ruta para mostrar su estado
-        const zones = await db('zonas').where('ruta_id', routeId).orderBy('orden');
-        
-        // Aquí podrías añadir lógica para obtener el estado actual de cada zona (con o sin tráfico)
-        // Por ahora, solo devolvemos la información básica.
-        
+        // Obtener datos del mapa para la URL de la captura
+        const route = await db('rutas').where('id', routeId).first();
+        if (!route) return res.status(404).json({ error: 'Ruta no encontrada.' });
+        const map = await db('mapas').where('id', route.mapa_id).first();
+        if (!map) return res.status(404).json({ error: 'Mapa no encontrado.' });
+
         const liveScreenshotUrl = `/screenshots/live/map_${map.id}_latest.png`;
 
         res.json({
-            route,
-            map,
             liveScreenshotUrl,
             latestAlerts,
-            zones
+            zones: zonasAnalizadas // Enviar el array completo de zonas con su estado
         });
 
     } catch (error) {
@@ -531,7 +523,7 @@ app.post('/capture', async (req, res) => {
     }
 });
 
-const { startTrafficMonitor } = require('./traffic-monitor');
+const { startTrafficMonitor, getEstadoRuta } = require('./traffic-monitor');
 
 // Inicializar la base de datos y luego iniciar el servidor
 initializeDatabase().then(() => {

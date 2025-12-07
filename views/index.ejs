@@ -522,10 +522,17 @@
                     <img id="live-screenshot" src="" alt="Captura en vivo del mapa" style="max-width: 100%; border: 2px solid #007bff;"/>
                     <p><small>Actualizado: <span id="last-updated">Nunca</span></small></p>
                 </div>
+
+                <div class="zones-status-section" style="margin-top: 2rem;">
+                    <h3>Estado de las Zonas</h3>
+                    <ul id="live-zones-list" style="list-style: none; padding: 0;">
+                        <li>Cargando estado de las zonas...</li>
+                    </ul>
+                </div>
                 
                 <div class="alerts-section">
                     <h3>Alertas de Tráfico Recientes</h3>
-                    <ul id="live-alerts-list">
+                    <ul id="live-alerts-list" style="list-style: none; padding: 0;">
                         <li>Cargando alertas...</li>
                     </ul>
                 </div>
@@ -537,6 +544,7 @@
                     const liveScreenshot = document.getElementById('live-screenshot');
                     const lastUpdated = document.getElementById('last-updated');
                     const liveAlertsList = document.getElementById('live-alerts-list');
+                    const liveZonesList = document.getElementById('live-zones-list');
 
                     async function updateStatus() {
                         try {
@@ -553,11 +561,36 @@
                             liveScreenshot.src = `${data.liveScreenshotUrl}?t=${timestamp}`;
                             lastUpdated.textContent = new Date().toLocaleTimeString();
 
+                            // Actualizar lista de zonas
+                            liveZonesList.innerHTML = ''; // Limpiar lista
+                            if (data.zones && data.zones.length > 0) {
+                                data.zones.forEach(zone => {
+                                    const li = document.createElement('li');
+                                    li.style.padding = '8px';
+                                    li.style.borderBottom = '1px solid #eee';
+                                    li.innerHTML = `
+                                        <span style="display: inline-block; width: 20px; height: 20px; background-color: ${zone.color_hex}; border: 1px solid #ccc; vertical-align: middle; margin-right: 10px;"></span>
+                                        <strong>${zone.orden}. ${zone.nombre}</strong> - 
+                                        <span>Color: ${zone.color_hex}</span> - 
+                                        <span style="font-weight: bold; color: ${zone.tiene_trafico ? 'red' : 'green'};">${zone.tiene_trafico ? 'Tráfico Detectado' : 'Normal'}</span>
+                                    `;
+                                    liveZonesList.appendChild(li);
+                                });
+                            } else {
+                                const li = document.createElement('li');
+                                li.textContent = 'No hay zonas definidas para analizar en esta ruta.';
+                                liveZonesList.appendChild(li);
+                            }
+
                             // Actualizar lista de alertas
                             liveAlertsList.innerHTML = ''; // Limpiar lista
                             if (data.latestAlerts && data.latestAlerts.length > 0) {
                                 data.latestAlerts.forEach(alert => {
                                     const li = document.createElement('li');
+                                    li.style.padding = '8px';
+                                    li.style.backgroundColor = '#fffbe6';
+                                    li.style.border = '1px solid #ffe58f';
+                                    li.style.marginBottom = '5px';
                                     li.textContent = `[${new Date(alert.fecha_creacion).toLocaleString()}] ${alert.mensaje}`;
                                     liveAlertsList.appendChild(li);
                                 });

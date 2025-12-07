@@ -7,6 +7,17 @@ const sharp = require('sharp');
 
 // Almacén para los workers de cada mapa
 const workers = new Map();
+// Caché para el último estado analizado de cada ruta
+const estadoRutasCache = new Map();
+
+/**
+ * Obtiene el último estado analizado de una ruta desde el caché.
+ * @param {number} rutaId - El ID de la ruta.
+ * @returns {Array<object> | undefined}
+ */
+function getEstadoRuta(rutaId) {
+    return estadoRutasCache.get(rutaId);
+}
 
 /**
  * Define si un color de píxel representa tráfico.
@@ -26,22 +37,30 @@ function esColorDeTrafico(color) {
  * @returns {Promise<Array<object>>} - Una promesa que resuelve a un array de zonas con tráfico.
  */
 async function analizarImagen(screenshotPath, zonas) {
-    const zonasConTrafico = [];
+    const zonasAnalizadas = [];
     try {
         const image = sharp(screenshotPath);
         for (const zona of zonas) {
-            const pixel = await image.extract({ left: zona.x, top: zona.y, width: 1, height: 1 }).raw().toBuffer();
-            const color = { r: pixel[0], g: pixel[1], b: pixel[2] };
+            const pixelBuffer = await image.extract({ left: zona.x, top: zona.y, width: 1, height: 1 }).raw().toBuffer();
+            const color = { r: pixelBuffer[0], g: pixelBuffer[1], b: pixelBuffer[2] };
+            
+            const tieneTrafico = esColorDeTrafico(color);
+            const colorHex = "#" + ((1 << 24) + (color.r << 16) + (color.g << 8) + color.b).toString(16).slice(1).toUpperCase();
 
-            if (esColorDeTrafico(color)) {
-                zonasConTrafico.push(zona);
-                console.log(`[Análisis] Tráfico detectado en la zona "${zona.nombre}" (R:${color.r}, G:${color.g}, B:${color.b})`);
+            if (tieneTrafico) {
+                console.log(`[Análisis] Tráfico detectado en la zona "${zona.nombre}" (Color: ${colorHex})`);
             }
+
+            zonasAnalizadas.push({
+                ...zona,
+                tiene_trafico: tieneTrafico,
+                color_hex: colorHex
+            });
         }
     } catch (error) {
         console.error('Error al analizar la imagen:', error);
     }
-    return zonasConTrafico;
+    return zonasAnalizadas;
 }
 
 /**
@@ -185,36 +204,74 @@ async function captureAndAnalyze(worker) {
             console.log(`[Worker ${worker.mapa_nombre}] Analizando ${zonas.length} zonas para la ruta "${ruta.nombre}"...`);
 
             // 3. Llamar a la función de análisis de imagen
-            const zonasConTrafico = await analizarImagen(screenshotPath, zonas);
+            const zonasAnalizadas = await analizarImagen(screenshotPath, zonas);
 
-            // 4. Con el resultado, llamar a la lógica de detección de colas
-            await detectarColas(zonasConTrafico, ruta);
-        }
+                        // Guardar el estado más reciente en el caché
 
-    } catch (error) {
-        console.error(`[Worker ${worker.mapa_nombre}] Error durante la captura y análisis:`, error);
-    }
-}
+                        estadoRutasCache.set(ruta.id, zonasAnalizadas);
 
-/**
- * Función principal para iniciar todo el sistema de monitoreo.
- */
-async function startTrafficMonitor() {
-    console.log('Iniciando el monitor de tráfico...');
-    try {
-        const mapas = await db('mapas').select('*');
-        if (mapas.length === 0) {
-            console.warn('No hay mapas en la base de datos. El monitor no se iniciará.');
-            return;
-        }
+            
 
-        for (const mapa of mapas) {
-            await startMapWorker(mapa);
-        }
-    } catch (error) {
-        console.error('Error fatal al iniciar el monitor de tráfico:', error);
-        process.exit(1);
-    }
-}
+                        // 4. Con el resultado, llamar a la lógica de detección de colas
 
-module.exports = { startTrafficMonitor };
+                        // Filtrar solo las zonas con tráfico para la detección de colas.
+
+                        const zonasConTrafico = zonasAnalizadas.filter(z => z.tiene_trafico);
+
+                        await detectarColas(zonasConTrafico, ruta);
+
+                    }
+
+                } catch (error) {
+
+                    console.error(`[Worker ${worker.mapa_nombre}] Error durante la captura y análisis:`, error);
+
+                }
+
+            }
+
+            
+
+            /**
+
+             * Función principal para iniciar todo el sistema de monitoreo.
+
+             */
+
+            async function startTrafficMonitor() {
+
+                console.log('Iniciando el monitor de tráfico...');
+
+                try {
+
+                    const mapas = await db('mapas').select('*');
+
+                    if (mapas.length === 0) {
+
+                        console.warn('No hay mapas en la base de datos. El monitor no se iniciará.');
+
+                        return;
+
+                    }
+
+            
+
+                    for (const mapa of mapas) {
+
+                        await startMapWorker(mapa);
+
+                    }
+
+                } catch (error) {
+
+                    console.error('Error fatal al iniciar el monitor de tráfico:', error);
+
+                    process.exit(1);
+
+                }
+
+            }
+
+            
+
+            module.exports = { startTrafficMonitor, getEstadoRuta };
