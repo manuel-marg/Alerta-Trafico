@@ -1,17 +1,5 @@
-# Node.js
 node_modules/
-npm-debug.log*
 .env
 .DS_Store
+adb/
 
-# Puppeteer
-.cache/
-
-# Screenshots
-public/screenshots/*.png
-public/screenshots/*.jpeg
-public/screenshots/*.jpg
-public/screenshots/*.webp
-
-# Logs
-*.log

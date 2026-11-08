@@ -1,0 +1,53 @@
+{
+  "origin": "Carretera Vieja Petare - Guarenas, Brisas de Araguaney, Ramón Brazón",
+  "destination": "11.ª Transversal de Los Palos Grandes, Sector Los Palos Grandes, Los Palos Grandes",
+  "originCoords": {
+    "lat": 10.481009,
+    "lng": -66.723928
+  },
+  "destinationCoords": {
+    "lat": 10.511455,
+    "lng": -66.840335
+  },
+  "targetArrivalTime": "08:00",
+  "bufferMinutes": 10,
+  "monitoringWindowMinutes": 90,
+  "googleMapsApiKey": "",
+  "enabled": true,
+  "lastNotificationDate": null,
+  "lastCheck": {
+    "timestamp": "2026-11-08T23:06:20.507Z",
+    "pendingConfig": false,
+    "trafficResult": {
+      "success": true,
+      "isSimulation": true,
+      "origin": "Carretera Vieja Petare - Guarenas, Brisas de Araguaney, Ramón Brazón",
+      "destination": "11.ª Transversal de Los Palos Grandes, Sector Los Palos Grandes, Los Palos Grandes",
+      "originCoords": {
+        "lat": 10.481009,
+        "lng": -66.723928
+      },
+      "destinationCoords": {
+        "lat": 10.511455,
+        "lng": -66.840335
+      },
+      "durationMinutes": 35,
+      "durationSeconds": 2100,
+      "durationText": "35 min",
+      "distanceText": "Calculando...",
+      "trafficSummary": "Modo reposo (Consumo optimizado de API: 0 consultas)"
+    },
+    "schedule": {
+      "targetDate": "2026-11-09T12:00:00.000Z",
+      "departureDate": "2026-11-09T11:15:00.000Z",
+      "isForTomorrow": true,
+      "minutesUntilArrival": 774,
+      "minutesUntilDeparture": 729,
+      "inWindow": false,
+      "mustLeaveNow": false,
+      "departureTimeFormatted": "07:15 a.m.",
+      "targetTimeFormatted": "08:00 a.m."
+    },
+    "statusMessage": "Jornada de hoy completada. Próxima salida programada para mañana a las 07:15 a.m.."
+  }
+}
