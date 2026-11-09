@@ -123,7 +123,70 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
     return simResult;
   }
 
-  // Consulta real a Google Maps Distance Matrix API
+  // Intentar primero con la moderna Google Routes API (computeRoutes) con tráfico en tiempo real
+  try {
+    const routesUrl = 'https://routes.googleapis.com/directions/v2:computeRoutes';
+    
+    // Preparar el cuerpo según si tenemos coordenadas exactas o nombres de dirección
+    const originPayload = originCoords 
+      ? { location: { latLng: { latitude: originCoords.lat, longitude: originCoords.lng } } }
+      : { address: origin };
+      
+    const destinationPayload = destinationCoords 
+      ? { location: { latLng: { latitude: destinationCoords.lat, longitude: destinationCoords.lng } } }
+      : { address: destination };
+
+    console.log(`🌐 [Google Routes API] Consultando tráfico en vivo: ${originParam} ➔ ${destParam}`);
+    
+    const routesResp = await fetch(routesUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey.trim(),
+        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.localizedValues,routes.description'
+      },
+      body: JSON.stringify({
+        origin: originPayload,
+        destination: destinationPayload,
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE'
+      })
+    });
+
+    const routesData = await routesResp.json();
+
+    if (routesResp.ok && routesData.routes && routesData.routes.length > 0) {
+      const route = routesData.routes[0];
+      // El formato de duration en Routes API suele ser "1845s"
+      const durationSeconds = route.duration ? parseInt(route.duration.replace('s', ''), 10) : 1800;
+      const durationMinutes = Math.ceil(durationSeconds / 60);
+      const distanceKm = route.distanceMeters ? (route.distanceMeters / 1000).toFixed(1) + ' km' : 'Desconocida';
+      const durationText = route.localizedValues?.duration?.text || `${durationMinutes} min`;
+
+      const liveResult = {
+        success: true,
+        isSimulation: false,
+        origin,
+        destination,
+        originCoords,
+        destinationCoords,
+        durationMinutes,
+        durationSeconds,
+        durationText,
+        distanceText: route.localizedValues?.distance?.text || distanceKm,
+        trafficSummary: 'Tráfico en vivo (Google Routes API)'
+      };
+
+      trafficCache = { timestamp: now, key: cacheKey, data: liveResult };
+      return liveResult;
+    } else {
+      console.log(`ℹ️ [Google Routes API no disponible o error: ${routesData.error?.message || 'status ' + routesResp.status}]. Probando Distance Matrix fallback...`);
+    }
+  } catch (errRoutes) {
+    console.warn('⚠️ Error al consultar Routes API, intentando Distance Matrix API:', errRoutes.message);
+  }
+
+  // Fallback a Google Maps Distance Matrix API
   try {
     const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
     url.searchParams.set('origins', originParam);
@@ -133,7 +196,7 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
     url.searchParams.set('mode', 'driving');
     url.searchParams.set('key', apiKey.trim());
 
-    console.log(`🌐 [Google Maps API] Realizando consulta de tráfico en vivo: ${originParam} ➔ ${destParam}`);
+    console.log(`🌐 [Google Maps Distance Matrix] Consulta de tráfico de respaldo: ${originParam} ➔ ${destParam}`);
     const resp = await fetch(url.toString());
     const data = await resp.json();
 

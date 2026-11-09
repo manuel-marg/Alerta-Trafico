@@ -16,7 +16,7 @@
   "enabled": true,
   "lastNotificationDate": null,
   "lastCheck": {
-    "timestamp": "2026-11-08T23:06:20.507Z",
+    "timestamp": "2026-11-09T00:34:21.326Z",
     "pendingConfig": false,
     "trafficResult": {
       "success": true,
@@ -41,8 +41,8 @@
       "targetDate": "2026-11-09T12:00:00.000Z",
       "departureDate": "2026-11-09T11:15:00.000Z",
       "isForTomorrow": true,
-      "minutesUntilArrival": 774,
-      "minutesUntilDeparture": 729,
+      "minutesUntilArrival": 686,
+      "minutesUntilDeparture": 641,
       "inWindow": false,
       "mustLeaveNow": false,
       "departureTimeFormatted": "07:15 a.m.",
