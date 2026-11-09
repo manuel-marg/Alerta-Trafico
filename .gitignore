@@ -2,4 +2,6 @@ node_modules/
 .env
 .DS_Store
 adb/
+*.tar.gz
+*.zip
 
