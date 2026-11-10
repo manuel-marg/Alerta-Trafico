@@ -1,12 +1,16 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v1';
+const CACHE_NAME = 'alerta-trafico-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/vendor/framework7/framework7-bundle.min.css',
+  '/vendor/framework7/framework7-bundle.min.js',
+  '/vendor/framework7/framework7-icons.css',
+  '/vendor/framework7/Framework7Icons.woff2'
 ];
 
 self.addEventListener('install', (event) => {

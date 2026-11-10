@@ -1,227 +1,430 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#2563eb" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Alerta Tráfico" />
+  <meta name="theme-color" content="#0b0f19" />
+  <title>Alerta-Tráfico | Alarma Matutina Inteligente</title>
+
+  <!-- PWA Manifest & Icons -->
   <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-  <!-- Leaflet.js (Open Source Map - 100% Gratuito y sin costo de API) -->
+
+  <!-- Framework7 Bundle CSS & Icons (Local Offline Assets) -->
+  <link rel="stylesheet" href="/vendor/framework7/framework7-bundle.min.css" />
+  <link rel="stylesheet" href="/vendor/framework7/framework7-icons.css" />
+
+  <!-- Leaflet Map CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Custom Mobile UI Styles -->
   <link rel="stylesheet" href="/styles.css" />
-  <title>Alerta de Tráfico Matutino</title>
 </head>
-<body>
+<body class="color-theme-blue">
+  <div id="app">
+    <!-- Views container with native tabs -->
+    <div class="views tabs safe-areas">
 
-  <div class="container">
-    <!-- Header -->
-    <header>
-      <div class="logo-group">
-        <div class="logo-icon">🚗</div>
-        <div>
-          <h1>Alerta de Tráfico</h1>
-          <p class="subtitle">Despertador dinámico según el tráfico real</p>
-        </div>
-      </div>
-      <div class="badges-group">
-        <span id="badge-push" class="badge badge-yellow">
-          <span class="badge-dot"></span>
-          <span id="badge-push-text">Push: Pendiente</span>
-        </span>
-        <span id="badge-api" class="badge badge-yellow">
-          <span class="badge-dot"></span>
-          <span id="badge-api-text">Simulación</span>
-        </span>
-      </div>
-    </header>
-
-    <!-- Banner para activar Notificaciones Push si no están activas -->
-    <div id="push-activation-card" class="card push-banner">
-      <div class="push-banner-text">
-        <h3>🔔 Activar Notificaciones Push</h3>
-        <p>Permite que la app te avise en el momento exacto en que debas salir.</p>
-      </div>
-      <button id="btn-enable-push" class="btn btn-primary">
-        Activar
-      </button>
-    </div>
-
-    <!-- Hero Card: Estado en Vivo y Hora de Salida -->
-    <div class="card card-hero">
-      <div class="hero-header">
-        <span class="hero-title">Estado del Viaje de Hoy</span>
-        <span id="hero-last-check" style="font-size: 0.75rem; color: var(--text-secondary);">Actualizado hace un momento</span>
-      </div>
-
-      <div id="alert-status-box" class="alert-banner alert-normal">
-        <span id="alert-status-icon">🟢</span>
-        <span id="alert-status-text">Calculando tiempo de viaje con tráfico actual...</span>
-      </div>
-
-      <div class="big-time-display">
-        <div class="big-time-label">DEBES SALIR A LAS</div>
-        <div id="big-departure-time" class="big-time-value">--:--</div>
-        <div id="countdown-text" style="font-size: 0.88rem; color: #93c5fd; margin-top: 6px; font-weight: 500;">
-          Calculando cuenta regresiva...
+      <!-- Bottom Tabbar (Toolbar) -->
+      <div class="toolbar toolbar-bottom tabbar tabbar-icons">
+        <div class="toolbar-inner">
+          <a href="#view-alarm" class="tab-link tab-link-active">
+            <i class="icon f7-icons">alarm_fill</i>
+            <span class="tabbar-label">Alarma</span>
+          </a>
+          <a href="#view-routine" class="tab-link">
+            <i class="icon f7-icons">slider_horizontal_3</i>
+            <span class="tabbar-label">Mi Rutina</span>
+          </a>
+          <a href="#view-map" class="tab-link" id="tab-link-map">
+            <i class="icon f7-icons">map_fill</i>
+            <span class="tabbar-label">Ruta</span>
+          </a>
         </div>
       </div>
 
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Tráfico Actual</div>
-          <div id="stat-traffic-duration" class="stat-value">-- min</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Margen Extra</div>
-          <div id="stat-buffer" class="stat-value">-- min</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Hora Meta</div>
-          <div id="stat-arrival-target" class="stat-value">--:--</div>
-        </div>
-      </div>
-
-      <div class="route-info">
-        <div class="route-point" title="Origen">
-          <span>🏠</span>
-          <strong id="display-origin">Mi Casa</strong>
-        </div>
-        <div class="route-arrow">➔</div>
-        <div class="route-point" title="Destino">
-          <span>🏢</span>
-          <strong id="display-destination">Mi Trabajo</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- Botones de Acción Rápida -->
-    <div class="action-buttons">
-      <button id="btn-test-notification" class="btn btn-secondary">
-        🔔 Probar Notificación Ahora
-      </button>
-      <button id="btn-refresh-now" class="btn btn-primary">
-        🔄 Actualizar Tráfico Ahora
-      </button>
-    </div>
-
-    <div style="text-align: right;">
-      <button id="btn-reset-today" style="background: none; border: none; color: var(--text-secondary); font-size: 0.78rem; text-decoration: underline; cursor: pointer;">
-        Reiniciar estado diario (para volver a probar la alarma hoy)
-      </button>
-    </div>
-
-    <!-- Formulario de Configuración -->
-    <div class="card">
-      <div class="form-title">
-        ⚙️ Configurar Mi Rutina
-      </div>
-
-      <form id="config-form">
-        <div class="form-group">
-          <label for="input-origin">Dirección o Punto de Partida (Casa):</label>
-          <div class="input-with-button">
-            <input type="text" id="input-origin" placeholder="Ej: Calle 5 con Av. Principal, Los Palos Grandes" required />
-            <button type="button" id="btn-pick-origin" class="btn btn-secondary btn-icon-label" title="Seleccionar en mapa">
-              📍 Mapa
-            </button>
-          </div>
-          <div id="origin-coords-preview" class="coords-pill" style="display: none;"></div>
-          <div class="input-hint">Puedes escribirla o hacer clic en <strong>📍 Mapa</strong> para colocar un pin exacto sin costo.</div>
-        </div>
-
-        <div class="form-group">
-          <label for="input-destination">Dirección del Trabajo (Destino):</label>
-          <div class="input-with-button">
-            <input type="text" id="input-destination" placeholder="Ej: Torre Financiera, Chacao" required />
-            <button type="button" id="btn-pick-destination" class="btn btn-secondary btn-icon-label" title="Seleccionar en mapa">
-              📍 Mapa
-            </button>
-          </div>
-          <div id="dest-coords-preview" class="coords-pill" style="display: none;"></div>
-          <div class="input-hint">Elige la ubicación exacta de tu oficina con el pin en el mapa.</div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="input-target-time">Hora de llegada al trabajo:</label>
-            <input type="time" id="input-target-time" required />
-            <div class="input-hint">Hora exacta a la que debes estar en la oficina.</div>
+      <!-- ============================================== -->
+      <!-- TAB 1: ALARMA Y MONITOR EN VIVO                -->
+      <!-- ============================================== -->
+      <div id="view-alarm" class="view view-main tab tab-active">
+        <div class="page" data-name="alarm">
+          
+          <!-- Top App Bar / Navbar -->
+          <div class="navbar navbar-transparent">
+            <div class="navbar-inner">
+              <div class="title" style="display: flex; align-items: center; gap: 8px;">
+                <span class="app-logo-badge">🚗</span>
+                <span style="font-weight: 700; letter-spacing: -0.02em;">Alerta-Tráfico</span>
+              </div>
+              <div class="right" style="gap: 6px;">
+                <span id="badge-push" class="status-pill status-yellow" title="Estado Web Push">
+                  <span class="status-dot"></span>
+                  <span id="badge-push-text">Push: Espera</span>
+                </span>
+                <span id="badge-api" class="status-pill status-green" title="Motor de tráfico">
+                  <span class="status-dot"></span>
+                  <span id="badge-api-text">Google Maps</span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="input-buffer">Margen previo (minutos):</label>
-            <input type="number" id="input-buffer" min="0" max="60" value="10" />
-            <div class="input-hint">Tiempo para bajar al coche, estacionar y subir.</div>
+          <!-- Page Content -->
+          <div class="page-content ptr-content" id="alarm-ptr-content">
+            <!-- Pull to Refresh Preloader -->
+            <div class="ptr-preloader">
+              <div class="preloader"></div>
+              <div class="ptr-arrow"></div>
+            </div>
+
+            <!-- Banner Activar Push si no está listo -->
+            <div id="push-activation-card" class="card push-banner-card" style="display: none;">
+              <div class="card-content card-content-padding" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                <div>
+                  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 2px;">🔔 Activar Alarma Push</div>
+                  <div style="font-size: 0.78rem; color: #94a3b8;">Permite avisarte al minuto exacto sin abrir la app.</div>
+                </div>
+                <button id="btn-enable-push" class="button button-fill button-round color-blue button-small">
+                  Activar
+                </button>
+              </div>
+            </div>
+
+            <!-- Banner Dinámico de Estado -->
+            <div class="block" style="margin-top: 10px; margin-bottom: 12px;">
+              <div id="alert-status-box" class="mobile-alert-banner alert-normal">
+                <span id="alert-status-icon" class="banner-icon">🟢</span>
+                <div id="alert-status-text" class="banner-text">Calculando tiempo de viaje con tráfico actual...</div>
+              </div>
+            </div>
+
+            <!-- Hero: Gran Reloj de Salida -->
+            <div class="card hero-time-card">
+              <div class="card-content card-content-padding text-align-center">
+                <div class="hero-label">DEBES SALIR A LAS</div>
+                <div id="big-departure-time" class="hero-time">--:--</div>
+                <div id="countdown-text" class="hero-countdown-pill">
+                  Calculando cuenta regresiva...
+                </div>
+                <div id="hero-last-check" class="hero-sync-time">
+                  Actualizado hace un momento
+                </div>
+              </div>
+            </div>
+
+            <!-- Resumen de Estadísticas en Cuadrícula -->
+            <div class="block" style="margin-top: 0; margin-bottom: 14px;">
+              <div class="row">
+                <div class="col-33">
+                  <div class="card stat-mini-card">
+                    <div class="stat-mini-label">Tráfico</div>
+                    <div id="stat-traffic-duration" class="stat-mini-val">-- min</div>
+                  </div>
+                </div>
+                <div class="col-33">
+                  <div class="card stat-mini-card">
+                    <div class="stat-mini-label">Margen</div>
+                    <div id="stat-buffer" class="stat-mini-val">-- min</div>
+                  </div>
+                </div>
+                <div class="col-33">
+                  <div class="card stat-mini-card">
+                    <div class="stat-mini-label">Llegada Meta</div>
+                    <div id="stat-arrival-target" class="stat-mini-val">--:--</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tarjeta de Ruta Actual -->
+            <div class="card route-card">
+              <div class="card-content card-content-padding">
+                <div class="route-step">
+                  <span class="route-icon">🏠</span>
+                  <div class="route-detail">
+                    <div class="route-tag">Punto de Partida</div>
+                    <strong id="display-origin" class="route-name">Cargando casa...</strong>
+                  </div>
+                </div>
+                <div class="route-divider-line"></div>
+                <div class="route-step">
+                  <span class="route-icon">🏢</span>
+                  <div class="route-detail">
+                    <div class="route-tag">Destino del Trabajo</div>
+                    <strong id="display-destination" class="route-name">Cargando trabajo...</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botones de Acción Rápida -->
+            <div class="block" style="margin-top: 14px;">
+              <div class="row">
+                <div class="col-50">
+                  <button id="btn-refresh-now" class="button button-fill button-round color-blue button-large">
+                    <i class="icon f7-icons" style="font-size: 18px; margin-right: 4px;">arrow_clockwise</i>
+                    Actualizar
+                  </button>
+                </div>
+                <div class="col-50">
+                  <button id="btn-test-notification" class="button button-tonal button-round color-blue button-large">
+                    <i class="icon f7-icons" style="font-size: 18px; margin-right: 4px;">bell</i>
+                    Probar Push
+                  </button>
+                </div>
+              </div>
+
+              <div style="text-align: center; margin-top: 14px;">
+                <a href="#" id="btn-reset-today" class="link text-color-gray" style="font-size: 0.76rem; text-decoration: underline;">
+                  Reiniciar estado de hoy (para volver a probar la alarma)
+                </a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 2: CONFIGURACIÓN DE RUTINA                 -->
+      <!-- ============================================== -->
+      <div id="view-routine" class="view tab">
+        <div class="page" data-name="routine">
+          
+          <div class="navbar">
+            <div class="navbar-inner">
+              <div class="title">⚙️ Mi Rutina de Viaje</div>
+            </div>
+          </div>
+
+          <div class="page-content">
+            <form id="config-form">
+              
+              <div class="block-title">PUNTOS DE RECORRIDO</div>
+              <div class="list inset list-strong-ios list-dividers-ios">
+                <ul>
+                  <!-- Origen -->
+                  <li class="item-content item-input">
+                    <div class="item-media">
+                      <i class="icon f7-icons color-blue">house_fill</i>
+                    </div>
+                    <div class="item-inner">
+                      <div class="item-title item-label">Partida (Casa)</div>
+                      <div class="item-input-wrap">
+                        <input type="text" id="input-origin" placeholder="Ej: Calle 5 con Av. Principal, Petare" required />
+                      </div>
+                      <div id="origin-coords-preview" class="coords-pill" style="display: none;"></div>
+                    </div>
+                    <div class="item-after" style="padding-right: 8px;">
+                      <button type="button" id="btn-pick-origin" class="button button-small button-tonal color-blue button-round">
+                        📍 Pin
+                      </button>
+                    </div>
+                  </li>
+
+                  <!-- Destino -->
+                  <li class="item-content item-input">
+                    <div class="item-media">
+                      <i class="icon f7-icons color-blue">building_2_fill</i>
+                    </div>
+                    <div class="item-inner">
+                      <div class="item-title item-label">Destino (Trabajo)</div>
+                      <div class="item-input-wrap">
+                        <input type="text" id="input-destination" placeholder="Ej: Torre Financiera, Los Palos Grandes" required />
+                      </div>
+                      <div id="dest-coords-preview" class="coords-pill" style="display: none;"></div>
+                    </div>
+                    <div class="item-after" style="padding-right: 8px;">
+                      <button type="button" id="btn-pick-destination" class="button button-small button-tonal color-blue button-round">
+                        📍 Pin
+                      </button>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="block-title">HORARIOS Y MÁRGENES</div>
+              <div class="list inset list-strong-ios list-dividers-ios">
+                <ul>
+                  <!-- Hora de Llegada Meta -->
+                  <li class="item-content item-input">
+                    <div class="item-media">
+                      <i class="icon f7-icons color-blue">clock_fill</i>
+                    </div>
+                    <div class="item-inner">
+                      <div class="item-title item-label">Hora meta de llegada al trabajo</div>
+                      <div class="item-input-wrap">
+                        <input type="time" id="input-target-time" required />
+                      </div>
+                    </div>
+                  </li>
+
+                  <!-- Margen de Preparación -->
+                  <li class="item-content item-input">
+                    <div class="item-media">
+                      <i class="icon f7-icons color-blue">hourglass</i>
+                    </div>
+                    <div class="item-inner">
+                      <div class="item-title item-label">Margen de alistado (minutos)</div>
+                      <div class="item-input-wrap">
+                        <input type="number" id="input-buffer" min="0" max="60" value="10" placeholder="Minutos para bajar y encender el auto" />
+                      </div>
+                    </div>
+                  </li>
+
+                  <!-- Ventana de Monitoreo -->
+                  <li class="item-content item-input">
+                    <div class="item-media">
+                      <i class="icon f7-icons color-blue">eye_fill</i>
+                    </div>
+                    <div class="item-inner">
+                      <div class="item-title item-label">Ventana de monitoreo previo (minutos)</div>
+                      <div class="item-input-wrap">
+                        <input type="number" id="input-window" min="30" max="240" value="90" placeholder="Desde cuántos minutos antes vigilar el tráfico" />
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Botón Guardar -->
+              <div class="block" style="margin-top: 20px;">
+                <button type="submit" class="button button-fill button-round color-blue button-large">
+                  <i class="icon f7-icons" style="font-size: 20px; margin-right: 6px;">floppy_disk</i>
+                  Guardar Mi Rutina
+                </button>
+              </div>
+
+              <!-- Nota informativa -->
+              <div class="block-footer text-align-center" style="padding: 0 16px 24px;">
+                💡 <strong>Optimización de batería y API:</strong> El sistema duerme toda la tarde y noche, y solo sondea de forma progresiva en tu ventana matutina.
+              </div>
+
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 3: VISOR DE RUTA EN EL MAPA                -->
+      <!-- ============================================== -->
+      <div id="view-map" class="view tab">
+        <div class="page" data-name="map">
+          
+          <div class="navbar">
+            <div class="navbar-inner">
+              <div class="title">🗺️ Mapa de Recorrido</div>
+              <div class="right">
+                <a href="#" id="btn-recenter-route" class="link icon-only" title="Centrar ruta">
+                  <i class="icon f7-icons">scope</i>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="page-content" style="padding: 0; position: relative; overflow: hidden;">
+            <div id="route-overview-map" style="width: 100%; height: 100%;"></div>
+            
+            <!-- Floating Bottom Card with Route Stats -->
+            <div class="map-floating-bottom-card">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Trayecto Actual</div>
+                  <div id="map-route-summary-title" style="font-weight: 700; font-size: 0.95rem;">Casa ➔ Trabajo</div>
+                </div>
+                <div style="text-align: right;">
+                  <span id="map-route-duration-badge" class="badge color-blue" style="font-size: 0.82rem; padding: 4px 8px;">
+                    -- min
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================== -->
+    <!-- POPUP MODAL: SELECTOR DE PIN EN EL MAPA        -->
+    <!-- ============================================== -->
+    <div class="popup popup-tablet-fullscreen" id="map-picker-popup">
+      <div class="page">
+        
+        <div class="navbar">
+          <div class="navbar-inner">
+            <div class="title" id="modal-map-title">📍 Seleccionar Ubicación</div>
+            <div class="right">
+              <a href="#" class="link popup-close" id="btn-close-modal">
+                <i class="icon f7-icons">xmark</i>
+              </a>
+            </div>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="input-window">Ventana de monitoreo previo (minutos):</label>
-          <input type="number" id="input-window" min="30" max="240" value="90" />
-          <div class="input-hint">El sistema empezará a vigilar el tráfico desde esta cantidad de minutos antes.</div>
-        </div>
+        <div class="page-content" style="padding: 0; position: relative; overflow: hidden;">
+          
+          <!-- Buscador flotante sobre el mapa -->
+          <div class="map-floating-search-bar">
+            <div class="search-input-box">
+              <i class="icon f7-icons" style="font-size: 18px; color: #94a3b8; margin-left: 10px;">search</i>
+              <input type="text" id="map-search-input" placeholder="Buscar calle, avenida o negocio..." />
+              <button type="button" id="btn-map-search" class="button button-fill button-small button-round color-blue" style="margin-right: 4px;">
+                Buscar
+              </button>
+            </div>
+            <!-- Lista de resultados sugeridos -->
+            <div id="map-search-results" class="map-search-dropdown" style="display: none;"></div>
+          </div>
 
-        <button type="submit" class="btn btn-primary btn-full" style="margin-top: 10px;">
-          💾 Guardar Configuración
-        </button>
-      </form>
+          <!-- Botón Flotante GPS -->
+          <button type="button" id="btn-map-gps" class="map-fab-gps" title="Ubicarme con GPS">
+            <i class="icon f7-icons">location_fill</i>
+          </button>
+
+          <!-- Contenedor del Mapa Leaflet -->
+          <div id="leaflet-map-container" style="width: 100%; height: 100%;"></div>
+
+          <!-- Barra flotante inferior de confirmación -->
+          <div class="map-floating-footer">
+            <div class="pin-info">
+              <div id="pin-address-text" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 2px;">
+                Toca el mapa o arrastra el pin
+              </div>
+              <div id="pin-coords-text" style="font-size: 0.72rem; color: #94a3b8;">
+                Coordenadas: --, --
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 10px;">
+              <button type="button" id="btn-cancel-pin" class="button button-tonal button-round color-gray flex-1">
+                Cancelar
+              </button>
+              <button type="button" id="btn-confirm-pin" class="button button-fill button-round color-blue flex-1">
+                Fijar Ubicación
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast" class="toast"></div>
+
   </div>
 
-  <!-- Modal de Selector de Mapa (OpenStreetMap + Leaflet) -->
-  <div id="map-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div>
-          <h3 id="modal-map-title">📍 Seleccionar Ubicación</h3>
-          <p class="subtitle" style="font-size: 0.76rem;">Haz clic en el mapa o arrastra el pin a tu ubicación exacta</p>
-        </div>
-        <button type="button" id="btn-close-modal" class="modal-close-btn" title="Cerrar">&times;</button>
-      </div>
+  <!-- Framework7 Bundle JS -->
+  <script src="/vendor/framework7/framework7-bundle.min.js"></script>
 
-      <!-- Buscador con OpenStreetMap Nominatim -->
-      <div class="map-search-bar">
-        <input type="text" id="map-search-input" placeholder="Buscar calle, avenida, negocio o punto..." />
-        <button type="button" id="btn-map-search" class="btn btn-primary" style="padding: 10px 14px; font-size: 0.85rem;">
-          🔍 Buscar
-        </button>
-        <button type="button" id="btn-map-gps" class="btn btn-secondary" title="Usar mi ubicación GPS actual" style="padding: 10px 12px;">
-          🎯 GPS
-        </button>
-      </div>
-      <div id="map-search-results" class="search-results-dropdown" style="display: none;"></div>
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-      <!-- Contenedor del mapa Leaflet -->
-      <div id="map-container"></div>
-
-      <!-- Info del pin actual -->
-      <div class="pin-info-box">
-        <div style="font-weight: 600; font-size: 0.85rem; color: #93c5fd;" id="pin-address-text">
-          Haz clic en cualquier punto del mapa para colocar el pin...
-        </div>
-        <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px;" id="pin-coords-text">
-          Coordenadas: --
-        </div>
-      </div>
-
-      <!-- Acciones del Modal -->
-      <div class="modal-actions">
-        <button type="button" id="btn-cancel-pin" class="btn btn-secondary">
-          Cancelar
-        </button>
-        <button type="button" id="btn-confirm-pin" class="btn btn-primary">
-          ✅ Confirmar Ubicación
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast">🔔 Mensaje</div>
-
+  <!-- App Logic -->
   <script src="/app.js"></script>
 </body>
 </html>
