@@ -30,7 +30,7 @@
 * **Public Tunneling:**
   * Tool: Cloudflare Quick Tunnel (`cloudflared` binary on Termux).
   * Exposes port `3000` to global HTTPS without port forwarding or public IP requirements.
-  * Active Tunnel URL: `https://kidney-bruce-hybrid-subsidiary.trycloudflare.com`
+  * Active Tunnel URL: `https://neither-elegant-grip-planes.trycloudflare.com`
 
 ### Development Node (Local Machine)
 * **OS:** Windows
