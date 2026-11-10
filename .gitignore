@@ -5,3 +5,7 @@ adb/
 *.tar.gz
 *.zip
 
+# Archivos de configuración y claves sensibles
+data/*.json
+!data/config.example.json
+

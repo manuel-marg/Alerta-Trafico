@@ -1,0 +1,13 @@
+{
+  "origin": "Mi Casa",
+  "destination": "Mi Trabajo",
+  "originCoords": null,
+  "destinationCoords": null,
+  "targetArrivalTime": "08:00",
+  "bufferMinutes": 10,
+  "monitoringWindowMinutes": 90,
+  "googleMapsApiKey": "",
+  "enabled": true,
+  "lastNotificationDate": null,
+  "lastCheck": null
+}
