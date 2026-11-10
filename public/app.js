@@ -1,19 +1,4 @@
-// ==============================================================
-// Alerta-Tráfico: Framework7 PWA Client Logic
-// Web Push, Google Routes API & OpenStreetMap (Leaflet)
-// ==============================================================
-
-// 1. Inicialización de Framework7
-const app = new Framework7({
-  el: '#app',
-  name: 'Alerta-Tráfico',
-  theme: 'auto', // Detecta automáticamente iOS en iPhone y MD en Android
-  darkMode: true,
-  touch: {
-    tapHold: true,
-    activeState: true
-  }
-});
+// Lógica del cliente PWA, Web Push y Mapa OpenStreetMap (Leaflet)
 
 let swRegistration = null;
 let currentConfig = null;
@@ -23,15 +8,11 @@ let lastCheckData = null;
 let originCoords = null;
 let destinationCoords = null;
 
-// Estado del mapa de selección de pin
+// Estado del modal de mapa
 let leafletMap = null;
 let currentMarker = null;
 let currentPickerTarget = 'origin'; // 'origin' o 'destination'
 let selectedPinData = { lat: null, lng: null, address: '' };
-
-// Estado del mapa de recorrido general (Tab 3)
-let overviewMap = null;
-let overviewRouteLayer = null;
 
 // Helper para convertir la clave VAPID de Base64 a Uint8Array
 function urlBase64ToUint8Array(base64String) {
@@ -49,21 +30,21 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// Mostrar Toast nativo de Framework7
+// Mostrar Toast
 function showToast(message) {
-  app.toast.create({
-    text: message,
-    position: 'top',
-    closeTimeout: 3500
-  }).open();
+  const toast = document.getElementById('toast');
+  toast.innerHTML = message;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 4000);
 }
 
-// --- 2. Inicialización de Service Worker y Web Push ---
+// --- 1. Inicialización de Service Worker y Web Push ---
 async function initServiceWorker() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     updatePushBadge('error', 'Push no soportado');
-    const pushCard = document.getElementById('push-activation-card');
-    if (pushCard) pushCard.style.display = 'none';
+    document.getElementById('push-activation-card').style.display = 'none';
     return;
   }
 
@@ -72,11 +53,9 @@ async function initServiceWorker() {
     console.log('✅ Service Worker registrado con éxito:', swRegistration.scope);
 
     const subscription = await swRegistration.pushManager.getSubscription();
-    const pushCard = document.getElementById('push-activation-card');
-
     if (subscription && Notification.permission === 'granted') {
       updatePushBadge('active', 'Push Activo');
-      if (pushCard) pushCard.style.display = 'none';
+      document.getElementById('push-activation-card').style.display = 'none';
       await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,7 +63,7 @@ async function initServiceWorker() {
       });
     } else {
       updatePushBadge('pending', 'Push Inactivo');
-      if (pushCard) pushCard.style.display = 'block';
+      document.getElementById('push-activation-card').style.display = 'flex';
     }
   } catch (err) {
     console.error('Error registrando el Service Worker:', err);
@@ -95,16 +74,14 @@ async function initServiceWorker() {
 function updatePushBadge(status, label) {
   const badge = document.getElementById('badge-push');
   const text = document.getElementById('badge-push-text');
-  if (!badge || !text) return;
-
-  badge.className = 'status-pill';
+  badge.className = 'badge';
 
   if (status === 'active') {
-    badge.classList.add('status-green');
+    badge.classList.add('badge-green');
   } else if (status === 'pending') {
-    badge.classList.add('status-yellow');
+    badge.classList.add('badge-yellow');
   } else {
-    badge.classList.add('status-red');
+    badge.classList.add('badge-red');
   }
   text.textContent = label;
 }
@@ -119,7 +96,7 @@ async function subscribeUserToPush() {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       showToast('⚠️ Permiso de notificaciones denegado en el navegador');
-      updatePushBadge('error', 'Denegado');
+      updatePushBadge('error', 'Permiso Denegado');
       return;
     }
 
@@ -139,8 +116,7 @@ async function subscribeUserToPush() {
     });
 
     updatePushBadge('active', 'Push Activo');
-    const pushCard = document.getElementById('push-activation-card');
-    if (pushCard) pushCard.style.display = 'none';
+    document.getElementById('push-activation-card').style.display = 'none';
     showToast('🎉 ¡Notificaciones Push activadas con éxito!');
   } catch (err) {
     console.error('Error suscribiendo al usuario:', err);
@@ -148,21 +124,23 @@ async function subscribeUserToPush() {
   }
 }
 
-// --- 3. Selector de Pin en Leaflet (Popup Modal) ---
+// --- 2. Leaflet & OpenStreetMap (Mapa Gratuito y Open Source) ---
 function initLeafletMap() {
   if (leafletMap) return;
 
+  // Centro por defecto
   const defaultLat = 10.4900;
   const defaultLng = -66.8600;
 
-  leafletMap = L.map('leaflet-map-container', { zoomControl: false }).setView([defaultLat, defaultLng], 13);
-  L.control.zoom({ position: 'topright' }).addTo(leafletMap);
+  leafletMap = L.map('map-container').setView([defaultLat, defaultLng], 13);
 
+  // Tiles de OpenStreetMap (100% libre, sin API Keys ni tarjetas)
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(leafletMap);
 
+  // Al hacer clic en el mapa, mover o colocar el pin
   leafletMap.on('click', async (e) => {
     const { lat, lng } = e.latlng;
     setPinOnMap(lat, lng);
@@ -188,16 +166,20 @@ function setPinOnMap(lat, lng) {
   document.getElementById('pin-coords-text').textContent = `Coordenadas: ${selectedPinData.lat}, ${selectedPinData.lng}`;
 }
 
+// Obtener dirección legible gratis mediante OpenStreetMap Nominatim
 async function reverseGeocode(lat, lng) {
   const addressText = document.getElementById('pin-address-text');
   addressText.textContent = 'Buscando nombre de la calle/zona...';
 
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`;
-    const resp = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+    const resp = await fetch(url, {
+      headers: { 'Accept-Language': 'es' }
+    });
     const data = await resp.json();
 
     if (data && data.display_name) {
+      // Limpiar nombre corto (calle, barrio o nombre principal)
       const parts = data.display_name.split(',');
       const shortAddress = parts.slice(0, 3).join(',').trim();
       selectedPinData.address = shortAddress || data.display_name;
@@ -212,6 +194,7 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
+// Buscador de lugares en el mapa con Nominatim
 async function searchPlaces(query) {
   const resultsContainer = document.getElementById('map-search-results');
   if (!query || query.trim().length < 3) {
@@ -228,7 +211,7 @@ async function searchPlaces(query) {
     const items = await resp.json();
 
     if (!items || items.length === 0) {
-      resultsContainer.innerHTML = '<div class="search-result-item" style="color: #94a3b8;">No se encontraron resultados. Prueba hacer zoom y tocar directo el mapa.</div>';
+      resultsContainer.innerHTML = '<div class="search-result-item" style="color: #94a3b8;">No se encontraron resultados. Prueba hacer zoom y clic directo en el mapa.</div>';
       return;
     }
 
@@ -253,25 +236,28 @@ async function searchPlaces(query) {
   }
 }
 
+// Abrir el modal de selección de mapa
 function openMapModal(target) {
   currentPickerTarget = target;
+  const modal = document.getElementById('map-modal');
   const title = document.getElementById('modal-map-title');
   const searchInput = document.getElementById('map-search-input');
   document.getElementById('map-search-results').style.display = 'none';
   searchInput.value = '';
 
   if (target === 'origin') {
-    title.textContent = '🏠 Ubicación de Casa (Partida)';
+    title.textContent = '🏠 Seleccionar Ubicación de Casa (Origen)';
   } else {
-    title.textContent = '🏢 Ubicación del Trabajo (Llegada)';
+    title.textContent = '🏢 Seleccionar Ubicación del Trabajo (Destino)';
   }
 
-  app.popup.open('#map-picker-popup');
+  modal.style.display = 'flex';
 
   setTimeout(() => {
     initLeafletMap();
     leafletMap.invalidateSize();
 
+    // Si ya tiene coordenadas previas, enfocar allí
     const existingCoords = target === 'origin' ? originCoords : destinationCoords;
     const existingText = document.getElementById(target === 'origin' ? 'input-origin' : 'input-destination').value;
 
@@ -279,8 +265,9 @@ function openMapModal(target) {
       leafletMap.setView([existingCoords.lat, existingCoords.lng], 16);
       setPinOnMap(existingCoords.lat, existingCoords.lng);
       selectedPinData.address = existingText || '';
-      document.getElementById('pin-address-text').textContent = `📍 ${selectedPinData.address || 'Ubicación fijada'}`;
+      document.getElementById('pin-address-text').textContent = `📍 ${selectedPinData.address || 'Ubicación actual guardada'}`;
     } else if (navigator.geolocation) {
+      // Intentar centrar en la ubicación del usuario si no tiene coords
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           leafletMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
@@ -289,16 +276,16 @@ function openMapModal(target) {
         { timeout: 5000 }
       );
     }
-  }, 250);
+  }, 120);
 }
 
 function closeMapModal() {
-  app.popup.close('#map-picker-popup');
+  document.getElementById('map-modal').style.display = 'none';
 }
 
 function confirmPinSelection() {
   if (!selectedPinData.lat || !selectedPinData.lng) {
-    showToast('⚠️ Primero toca el mapa para fijar un pin');
+    showToast('⚠️ Primero haz clic en el mapa para fijar un pin');
     return;
   }
 
@@ -315,98 +302,30 @@ function confirmPinSelection() {
   }
 
   closeMapModal();
-  showToast('📍 Ubicación fijada con éxito');
-  updateOverviewMapMarkers();
+  showToast('📍 Ubicación fijada en el mapa con éxito');
 }
 
 function renderCoordsPreview(target) {
   if (target === 'origin') {
     const preview = document.getElementById('origin-coords-preview');
     if (originCoords) {
-      preview.textContent = `📍 Coordenadas: ${originCoords.lat}, ${originCoords.lng}`;
-      preview.style.display = 'inline-block';
+      preview.textContent = `📍 Coordenadas fijadas: ${originCoords.lat}, ${originCoords.lng}`;
+      preview.style.display = 'inline-flex';
     } else {
       preview.style.display = 'none';
     }
   } else {
     const preview = document.getElementById('dest-coords-preview');
     if (destinationCoords) {
-      preview.textContent = `📍 Coordenadas: ${destinationCoords.lat}, ${destinationCoords.lng}`;
-      preview.style.display = 'inline-block';
+      preview.textContent = `📍 Coordenadas fijadas: ${destinationCoords.lat}, ${destinationCoords.lng}`;
+      preview.style.display = 'inline-flex';
     } else {
       preview.style.display = 'none';
     }
   }
 }
 
-// --- 4. Visor de Ruta General (Tab 3) ---
-function initOverviewMap() {
-  if (overviewMap) {
-    overviewMap.invalidateSize();
-    updateOverviewMapMarkers();
-    return;
-  }
-
-  const defaultLat = originCoords ? originCoords.lat : 10.4900;
-  const defaultLng = originCoords ? originCoords.lng : -66.8600;
-
-  overviewMap = L.map('route-overview-map', { zoomControl: false }).setView([defaultLat, defaultLng], 12);
-  L.control.zoom({ position: 'topright' }).addTo(overviewMap);
-
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(overviewMap);
-
-  updateOverviewMapMarkers();
-}
-
-function updateOverviewMapMarkers() {
-  if (!overviewMap) return;
-  if (overviewRouteLayer) {
-    overviewMap.removeLayer(overviewRouteLayer);
-  }
-
-  const group = L.featureGroup();
-
-  if (originCoords && originCoords.lat) {
-    L.marker([originCoords.lat, originCoords.lng])
-      .bindPopup(`<b>🏠 Partida:</b><br>${currentConfig?.origin || 'Mi Casa'}`)
-      .addTo(group);
-  }
-
-  if (destinationCoords && destinationCoords.lat) {
-    L.marker([destinationCoords.lat, destinationCoords.lng])
-      .bindPopup(`<b>🏢 Llegada:</b><br>${currentConfig?.destination || 'Mi Trabajo'}`)
-      .addTo(group);
-  }
-
-  if (originCoords && destinationCoords) {
-    L.polyline([
-      [originCoords.lat, originCoords.lng],
-      [destinationCoords.lat, destinationCoords.lng]
-    ], {
-      color: '#3b82f6',
-      weight: 4,
-      opacity: 0.85,
-      dashArray: '8, 8'
-    }).addTo(group);
-  }
-
-  group.addTo(overviewMap);
-  overviewRouteLayer = group;
-
-  if (originCoords && destinationCoords) {
-    overviewMap.fitBounds(group.getBounds(), { padding: [50, 50] });
-  }
-
-  const summary = document.getElementById('map-route-summary-title');
-  if (summary && currentConfig) {
-    summary.textContent = `${currentConfig.origin?.split(',')[0] || 'Casa'} ➔ ${currentConfig.destination?.split(',')[0] || 'Trabajo'}`;
-  }
-}
-
-// --- 5. Lógica del Dashboard y Estado de Tráfico ---
+// --- 3. Cargar y Guardar Configuración ---
 async function loadConfig() {
   try {
     const resp = await fetch('/api/config');
@@ -426,13 +345,13 @@ async function loadConfig() {
     const badgeApi = document.getElementById('badge-api');
     const badgeApiText = document.getElementById('badge-api-text');
     if (badgeApi && badgeApiText) {
-      badgeApi.className = 'status-pill';
+      badgeApi.className = 'badge';
       if (currentConfig.hasApiKey) {
-        badgeApi.classList.add('status-green');
-        badgeApiText.textContent = 'Google Maps';
+        badgeApi.classList.add('badge-green');
+        badgeApiText.textContent = 'Google Maps Satelital';
       } else {
-        badgeApi.classList.add('status-yellow');
-        badgeApiText.textContent = 'Simulación';
+        badgeApi.classList.add('badge-yellow');
+        badgeApiText.textContent = 'Modo Simulación';
       }
     }
 
@@ -440,10 +359,6 @@ async function loadConfig() {
     document.getElementById('display-destination').textContent = currentConfig.destination || 'Sin configurar';
     document.getElementById('stat-arrival-target').textContent = currentConfig.targetArrivalTime || '--:--';
     document.getElementById('stat-buffer').textContent = `${currentConfig.bufferMinutes || 0} min`;
-
-    if (currentConfig.lastCheck) {
-      renderDashboard(currentConfig.lastCheck);
-    }
   } catch (err) {
     console.error('Error cargando configuración:', err);
   }
@@ -451,14 +366,14 @@ async function loadConfig() {
 
 async function checkTrafficNow(force = false) {
   try {
-    document.getElementById('hero-last-check').textContent = 'Consultando tráfico en vivo...';
+    document.getElementById('hero-last-check').textContent = 'Consultando...';
     const resp = await fetch(`/api/traffic-check${force ? '?force=true' : ''}`);
     const data = await resp.json();
 
     if (data.success && data.check) {
       lastCheckData = data.check;
       renderDashboard(data.check);
-      document.getElementById('hero-last-check').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      document.getElementById('hero-last-check').textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     }
   } catch (err) {
     console.error('Error consultando tráfico:', err);
@@ -473,14 +388,13 @@ function renderDashboard(check) {
   const departureDisplay = document.getElementById('big-departure-time');
   const countdownText = document.getElementById('countdown-text');
   const statTraffic = document.getElementById('stat-traffic-duration');
-  const mapRouteDuration = document.getElementById('map-route-duration-badge');
 
   if (!check) return;
 
   if (check.pendingConfig) {
-    alertBox.className = 'mobile-alert-banner alert-waiting';
+    alertBox.className = 'alert-banner alert-waiting';
     alertIcon.textContent = '⚙️';
-    alertText.textContent = 'Faltan datos de origen o destino. Configura tu rutina en la pestaña Mi Rutina.';
+    alertText.textContent = 'Faltan datos de origen o destino. Configura tus ubicaciones abajo.';
     departureDisplay.textContent = '--:--';
     countdownText.textContent = 'Pendiente configurar ruta';
     statTraffic.textContent = '-- min';
@@ -490,7 +404,7 @@ function renderDashboard(check) {
   const { trafficResult, schedule } = check;
 
   if (!trafficResult || !trafficResult.success) {
-    alertBox.className = 'mobile-alert-banner alert-leave-now';
+    alertBox.className = 'alert-banner alert-leave-now';
     alertIcon.textContent = '⚠️';
     alertText.textContent = trafficResult?.error || 'No se pudo obtener información del tráfico.';
     departureDisplay.textContent = '--:--';
@@ -498,9 +412,6 @@ function renderDashboard(check) {
   }
 
   statTraffic.textContent = trafficResult.durationText;
-  if (mapRouteDuration) {
-    mapRouteDuration.textContent = `${trafficResult.durationText} de viaje`;
-  }
 
   if (!schedule) return;
 
@@ -510,62 +421,66 @@ function renderDashboard(check) {
     if (min < 60) return `${min} minutos`;
     const h = Math.floor(min / 60);
     const m = min % 60;
-    return `${h} h ${m} min`;
+    return `${h} hora${h > 1 ? 's' : ''} y ${m} min`;
   }
 
   // CASO 1: Ya pasó la hora de llegada de hoy -> El próximo viaje es MAÑANA
   if (schedule.isForTomorrow) {
-    alertBox.className = 'mobile-alert-banner alert-night';
+    alertBox.className = 'alert-banner alert-night';
     alertIcon.textContent = '🌙';
     alertText.textContent = `Jornada de hoy completada. Próxima llegada meta: Mañana a las ${currentConfig?.targetArrivalTime || '08:00'}.`;
-    countdownText.textContent = `Próxima salida mañana a las ${schedule.departureTimeFormatted} (faltan ${formatMinutes(schedule.minutesUntilDeparture)})`;
+    countdownText.textContent = `Próxima salida mañana a las ${schedule.departureTimeFormatted} (faltan ${formatMinutes(schedule.minutesUntilDeparture)}).`;
+    countdownText.style.color = '#93c5fd';
     return;
   }
 
   // CASO 2: Es hoy y ya es hora crítica de salir
   if (schedule.mustLeaveNow) {
-    alertBox.className = 'mobile-alert-banner alert-leave-now';
+    alertBox.className = 'alert-banner alert-leave-now';
     alertIcon.textContent = '🚨';
     alertText.textContent = `¡DEBES SALIR YA! El tráfico actual es de ${trafficResult.durationText}.`;
-    countdownText.textContent = '⚠️ Ventana crítica de salida activa para llegar puntual.';
+    countdownText.textContent = '⚠️ Ya estás en la ventana crítica de salida para llegar puntual.';
+    countdownText.style.color = '#fca5a5';
     return;
   }
 
   // CASO 3: Es hoy y estamos en la ventana de monitoreo matutino
   if (schedule.inWindow) {
-    alertBox.className = 'mobile-alert-banner alert-normal';
+    alertBox.className = 'alert-banner alert-normal';
     alertIcon.textContent = '🟢';
-    alertText.textContent = `Monitoreo matutino activo. Tráfico en vivo: ${trafficResult.durationText}.`;
+    alertText.textContent = `Monitoreo matutino activo. Tráfico actual: ${trafficResult.durationText}.`;
     countdownText.textContent = `Te quedan aproximadamente ${formatMinutes(schedule.minutesUntilDeparture)} para salir.`;
+    countdownText.style.color = '#6ee7b7';
     return;
   }
 
   // CASO 4: Es hoy pero antes de la ventana de monitoreo
-  alertBox.className = 'mobile-alert-banner alert-waiting';
+  alertBox.className = 'alert-banner alert-waiting';
   alertIcon.textContent = '⏳';
   alertText.textContent = `En espera. Tu salida de hoy está prevista para las ${schedule.departureTimeFormatted}.`;
   countdownText.textContent = `Faltan ${formatMinutes(schedule.minutesUntilDeparture)} para la salida.`;
+  countdownText.style.color = '#fde68a';
 }
 
 async function triggerTestNotification() {
   try {
-    showToast('Enviando notificación push de prueba...');
+    showToast('Enviando notificación de prueba...');
     const resp = await fetch('/api/test-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: '🚗 Prueba de Alerta de Tráfico',
-        body: '¡Esta es una notificación push de prueba! Tu teléfono está listo para avisarte en la mañana.'
+        body: '¡Esta es una notificación push de prueba! Tu navegador está listo para avisarte en la mañana.'
       })
     });
     const result = await resp.json();
     if (result.sentTo > 0) {
-      showToast(`✅ Alerta enviada a ${result.sentTo} dispositivo(s)`);
+      showToast(`✅ Notificación enviada a ${result.sentTo} dispositivo(s)`);
     } else {
-      showToast('⚠️ No hay dispositivos suscritos. Activa el Push primero.');
+      showToast('⚠️ No hay dispositivos suscritos. Haz clic en "Activar Notificaciones" primero.');
     }
   } catch (err) {
-    showToast('❌ Error al enviar notificación');
+    showToast('❌ Error al enviar la notificación de prueba');
   }
 }
 
@@ -596,71 +511,56 @@ async function handleConfigSubmit(e) {
     });
 
     if (resp.ok) {
-      showToast('💾 Rutina guardada exitosamente');
+      showToast('💾 Configuración guardada correctamente con tus ubicaciones');
       await loadConfig();
-      await checkTrafficNow(true);
-      updateOverviewMapMarkers();
+      await checkTrafficNow();
     } else {
-      showToast('❌ Error al guardar rutina');
+      showToast('❌ Error al guardar la configuración');
     }
   } catch (err) {
     showToast('❌ Error de conexión al guardar');
   }
 }
 
-async function resetTodayState(e) {
-  if (e) e.preventDefault();
+async function resetTodayState() {
   try {
     const resp = await fetch('/api/reset-today', { method: 'POST' });
     const data = await resp.json();
     showToast(`🔄 ${data.message}`);
-    await checkTrafficNow(true);
+    await checkTrafficNow();
   } catch (e) {
     showToast('Error al reiniciar');
   }
 }
 
-// --- 6. Inicialización de Eventos ---
+// --- 4. Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
   await initServiceWorker();
   await loadConfig();
   await checkTrafficNow();
 
-  // Pull to refresh en la vista principal
-  const ptr = app.ptr.create({
-    el: '#alarm-ptr-content',
-    on: {
-      refresh: async (ptrEl, done) => {
-        await checkTrafficNow(true);
-        done();
-        showToast('🔄 Tráfico en vivo actualizado');
-      }
-    }
-  });
-
   // Botón activar push
-  const btnPush = document.getElementById('btn-enable-push');
-  if (btnPush) btnPush.addEventListener('click', subscribeUserToPush);
+  document.getElementById('btn-enable-push').addEventListener('click', subscribeUserToPush);
 
   // Botón probar notificación
   document.getElementById('btn-test-notification').addEventListener('click', triggerTestNotification);
 
-  // Botón refrescar ahora
+  // Botón refrescar ahora (fuerza consulta en vivo)
   document.getElementById('btn-refresh-now').addEventListener('click', () => checkTrafficNow(true));
 
   // Botón reset diario
   document.getElementById('btn-reset-today').addEventListener('click', resetTodayState);
 
-  // Abrir selector de pin
+  // Botones para abrir el selector de mapa
   document.getElementById('btn-pick-origin').addEventListener('click', () => openMapModal('origin'));
   document.getElementById('btn-pick-destination').addEventListener('click', () => openMapModal('destination'));
 
-  // Acciones en el modal de mapa
+  // Acciones dentro del modal de mapa
   document.getElementById('btn-close-modal').addEventListener('click', closeMapModal);
   document.getElementById('btn-cancel-pin').addEventListener('click', closeMapModal);
   document.getElementById('btn-confirm-pin').addEventListener('click', confirmPinSelection);
 
-  // Buscador de mapa
+  // Buscador del mapa
   const searchInput = document.getElementById('map-search-input');
   document.getElementById('btn-map-search').addEventListener('click', () => {
     searchPlaces(searchInput.value);
@@ -672,44 +572,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Botón GPS en el mapa
+  // Botón GPS del mapa
   document.getElementById('btn-map-gps').addEventListener('click', () => {
     if (!navigator.geolocation) {
-      showToast('Navegador sin soporte GPS');
+      showToast('Tu navegador no soporta geolocalización GPS');
       return;
     }
-    showToast('Buscando GPS...');
+    showToast('Buscando señal GPS...');
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         leafletMap.setView([latitude, longitude], 17);
         setPinOnMap(latitude, longitude);
         await reverseGeocode(latitude, longitude);
-        showToast('📍 Ubicación encontrada');
+        showToast('📍 Ubicación GPS encontrada');
       },
-      () => {
-        showToast('No se pudo obtener señal GPS');
+      (err) => {
+        showToast('No se pudo obtener la ubicación GPS (permiso denegado o sin señal)');
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   });
 
-  // Tab 3: Inicializar mapa general al hacer clic
-  document.getElementById('tab-link-map').addEventListener('click', () => {
-    setTimeout(() => {
-      initOverviewMap();
-    }, 250);
-  });
-
-  document.getElementById('btn-recenter-route').addEventListener('click', (e) => {
-    e.preventDefault();
-    updateOverviewMapMarkers();
+  // Cerrar modal al hacer clic en el fondo oscuro
+  document.getElementById('map-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'map-modal') {
+      closeMapModal();
+    }
   });
 
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);
 
-  // Chequeo periódico cada 30 segundos
+  // Desplegable de guía (si existe)
+  const guideToggle = document.getElementById('guide-toggle');
+  const guideContent = document.getElementById('guide-content');
+  const guideChevron = document.getElementById('guide-chevron');
+
+  if (guideToggle && guideContent && guideChevron) {
+    guideToggle.addEventListener('click', () => {
+      const isHidden = guideContent.style.display === 'none';
+      guideContent.style.display = isHidden ? 'block' : 'none';
+      guideChevron.textContent = isHidden ? '▲' : '▼';
+    });
+  }
+
+  // Chequeo periódico cada 30 segundos en la vista abierta
   setInterval(() => {
     checkTrafficNow();
   }, 30 * 1000);
