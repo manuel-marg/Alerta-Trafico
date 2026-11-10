@@ -57,13 +57,11 @@
   3. Simulation Mode: Active when no Google API Key is provided.
 
 ### Frontend (`public/`)
-* **Format:** Framework7 v8 (Bundle local offline) + Vanilla JavaScript, HTML5, CSS3.
-* **Mobile-First UX:**
-  * Native Tabbar inferior (Alarma, Mi Rutina, Mapa de Recorrido).
-  * Auto-tema: Material Design en Android, iOS en iPhone.
-  * Pull-to-refresh táctil en la pantalla principal para refrescar el tráfico en vivo con un deslizamiento del pulgar.
-  * Selector de ubicación con Popup nativo de Framework7 + Leaflet + OpenStreetMap.
-* **Service Worker (`public/sw.js`):** Cache offline v2 incluyendo assets locales de Framework7, intercepta push events y entrega notificaciones sonoras con vibración.
+* **Format:** Pure Vanilla JavaScript, HTML5, CSS3 (No framework or heavy bundlers).
+* **Service Worker (`public/sw.js`):** Intercepts push events, delivers native OS vibration, sounds, and interactive notifications.
+* **Map Pin Selector:**
+  * Integrated with **Leaflet.js** and **OpenStreetMap (Nominatim)**.
+  * Avoids consuming Google Maps Geocoding / Places API quota for coordinate picking.
 
 ---
 
