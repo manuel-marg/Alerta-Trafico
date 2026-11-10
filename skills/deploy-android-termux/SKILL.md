@@ -47,11 +47,15 @@ print(stdout.read().decode('utf-8', errors='replace'))
 ssh.close()
 ```
 
-### 2. Ensuring 24/7 Phone Wake Lock
+### 2. Ensuring 24/7 Phone Wake Lock & Auto-Start
 On Termux, ensure the Android CPU does not enter deep sleep:
 ```bash
 termux-wake-lock
 ```
+
+Auto-start configurations installed:
+* **Interactive startup:** `~/.bashrc` automatically runs `bash ~/start.sh` if `node server.js` is not active.
+* **Boot-time startup:** `~/.termux/boot/start-alerta.sh` is configured to run at Android startup (requires Termux:Boot add-on).
 
 ### 3. Cloudflare Quick Tunnel Management
 If the tunnel terminates or restarts:
