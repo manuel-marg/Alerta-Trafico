@@ -344,16 +344,15 @@ async function loadConfig() {
 
     const badgeApi = document.getElementById('badge-api');
     const badgeApiText = document.getElementById('badge-api-text');
-    badgeApi.className = 'badge';
-
-    if (currentConfig.hasApiKey) {
-      badgeApi.classList.add('badge-green');
-      badgeApiText.textContent = 'Google Maps Real';
-      document.getElementById('input-api-key').placeholder = `Clave guardada (${currentConfig.maskedApiKey})`;
-    } else {
-      badgeApi.classList.add('badge-yellow');
-      badgeApiText.textContent = 'Modo Simulación';
-      document.getElementById('input-api-key').placeholder = 'Pega tu clave AIzaSy... (vacío = simulación)';
+    if (badgeApi && badgeApiText) {
+      badgeApi.className = 'badge';
+      if (currentConfig.hasApiKey) {
+        badgeApi.classList.add('badge-green');
+        badgeApiText.textContent = 'Google Maps Satelital';
+      } else {
+        badgeApi.classList.add('badge-yellow');
+        badgeApiText.textContent = 'Modo Simulación';
+      }
     }
 
     document.getElementById('display-origin').textContent = currentConfig.origin || 'Sin configurar';
@@ -493,7 +492,6 @@ async function handleConfigSubmit(e) {
   const targetArrivalTime = document.getElementById('input-target-time').value;
   const bufferMinutes = document.getElementById('input-buffer').value;
   const monitoringWindowMinutes = document.getElementById('input-window').value;
-  const rawApiKey = document.getElementById('input-api-key').value;
 
   const payload = {
     origin,
@@ -504,10 +502,6 @@ async function handleConfigSubmit(e) {
     bufferMinutes,
     monitoringWindowMinutes
   };
-
-  if (rawApiKey.trim() !== '') {
-    payload.googleMapsApiKey = rawApiKey.trim();
-  }
 
   try {
     const resp = await fetch('/api/config', {
@@ -610,16 +604,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);
 
-  // Desplegable de guía
+  // Desplegable de guía (si existe)
   const guideToggle = document.getElementById('guide-toggle');
   const guideContent = document.getElementById('guide-content');
   const guideChevron = document.getElementById('guide-chevron');
 
-  guideToggle.addEventListener('click', () => {
-    const isHidden = guideContent.style.display === 'none';
-    guideContent.style.display = isHidden ? 'block' : 'none';
-    guideChevron.textContent = isHidden ? '▲' : '▼';
-  });
+  if (guideToggle && guideContent && guideChevron) {
+    guideToggle.addEventListener('click', () => {
+      const isHidden = guideContent.style.display === 'none';
+      guideContent.style.display = isHidden ? 'block' : 'none';
+      guideChevron.textContent = isHidden ? '▲' : '▼';
+    });
+  }
 
   // Chequeo periódico cada 30 segundos en la vista abierta
   setInterval(() => {

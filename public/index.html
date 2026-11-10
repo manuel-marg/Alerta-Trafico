@@ -165,42 +165,10 @@
           <div class="input-hint">El sistema empezará a vigilar el tráfico desde esta cantidad de minutos antes.</div>
         </div>
 
-        <div class="form-group">
-          <label for="input-api-key">Google Maps API Key (Opcional por ahora):</label>
-          <input type="password" id="input-api-key" placeholder="Pega tu clave AIzaSy... (deja vacío para modo simulación)" />
-          <div class="input-hint">Si lo dejas en blanco, la app funcionará en modo de prueba con estimaciones realistas.</div>
-        </div>
-
         <button type="submit" class="btn btn-primary btn-full" style="margin-top: 10px;">
           💾 Guardar Configuración
         </button>
       </form>
-    </div>
-
-    <!-- Guía Desplegable de Google Maps API -->
-    <div class="info-card">
-      <div class="info-header" id="guide-toggle">
-        <div class="info-title">
-          <span>🗺️</span>
-          <span>¿Cómo obtener la API Key de Google Maps gratis?</span>
-        </div>
-        <span id="guide-chevron">▼</span>
-      </div>
-      <div class="info-body" id="guide-content" style="display: none;">
-        <p>Google Maps ofrece <strong>$200 USD mensuales de crédito gratuito</strong>, lo que equivale a miles de consultas al mes sin pagar ni un centavo para uso personal. Sigue estos pasos:</p>
-        <ol>
-          <li>Entra a la <a href="https://console.cloud.google.com/" target="_blank" style="color: #60a5fa;">Google Cloud Console</a> e inicia sesión con tu cuenta de Google.</li>
-          <li>Crea un proyecto nuevo (por ejemplo: <span class="code-pill">Alerta-Trafico</span>).</li>
-          <li>En el menú lateral, ve a <strong>APIs y Servicios &gt; Biblioteca</strong> y habilita:
-            <ul>
-              <li><strong>Distance Matrix API</strong> (o Routes API)</li>
-              <li><strong>Directions API</strong></li>
-            </ul>
-          </li>
-          <li>Ve a <strong>APIs y Servicios &gt; Credenciales</strong>, haz clic en <strong>Crear Credenciales &gt; Clave de API</strong>.</li>
-          <li>Copia tu clave y pégala arriba en el campo <em>Google Maps API Key</em>.</li>
-        </ol>
-      </div>
     </div>
   </div>
 
