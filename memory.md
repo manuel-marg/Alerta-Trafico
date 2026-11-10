@@ -74,6 +74,7 @@
 | **Paramiko SSH hanging on `nohup`** | SSH subshell kept stdout/stderr file descriptors open indefinitely. | Always redirect all streams explicitly: `nohup node server.js </dev/null >~/server.log 2>&1 &`. |
 | **Phone `npm install` timeout** | Termux on older Android phones suffered DNS/TCP timeouts reaching `registry.npmjs.org`. | Compressed local Windows `node_modules` into `node_modules.tar.gz` and transferred directly via Paramiko SFTP. |
 | **Git pull conflict on phone** | `data/config.json` was locally modified on the phone by app runtime. | Always run `git checkout data/config.json && git pull origin main` before restarting the server. |
+| **Exposure of private data / keys** | `data/config.json` and `data/vapid.json` contained coordinates and keys. | Untracked `data/*.json` from Git, added them to `.gitignore`, and created `data/config.example.json` as a safe template. |
 | **Google Cloud API mismatch** | Directions API was not listed standalone in Google Cloud Console. | Google consolidated Directions API into **Routes API** (`computeRoutes`). Backend was updated with native Routes API payload. |
 
 ---
