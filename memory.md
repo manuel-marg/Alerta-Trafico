@@ -19,7 +19,7 @@
 
 ### Host Node (Production Server)
 * **Device:** Secondary Android Phone running Termux.
-* **Local Network IP:** `192.168.1.102`
+* **Local Network IP:** `192.168.1.210` (Static / IP Fija configurada)
 * **SSH Port:** `8022` (Termux non-standard port)
 * **SSH Credentials:**
   * User: `u0_a141`
