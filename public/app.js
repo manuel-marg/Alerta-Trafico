@@ -419,9 +419,9 @@ function openMapModal(target) {
   const coordsText = document.getElementById('pin-coords-text');
 
   if (target === 'origin') {
-    title.textContent = '📍 Fijar Punto de Partida (Casa)';
+    title.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle; color: #1a73e8; font-size: 22px;">home_pin</span> Fijar Punto de Partida (Casa)';
   } else {
-    title.textContent = '📍 Fijar Destino (Oficina / Trabajo)';
+    title.innerHTML = '<span class="material-symbols-outlined" style="vertical-align: middle; color: #d93025; font-size: 22px;">pin_drop</span> Fijar Destino (Oficina / Trabajo)';
   }
 
   modal.style.display = 'flex';
@@ -438,7 +438,7 @@ function openMapModal(target) {
         : document.getElementById('input-destination').value;
       if (existingAddress) {
         selectedPinData.address = existingAddress;
-        addressText.textContent = `📍 ${existingAddress}`;
+        addressText.innerHTML = `<span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px; margin-right: 4px;">pin_drop</span> ${existingAddress}`;
       }
     } else {
       coordsText.textContent = 'Coordenadas: --';
@@ -479,7 +479,7 @@ function renderCoordsPreview(target) {
   if (target === 'origin') {
     const preview = document.getElementById('origin-coords-preview');
     if (originCoords) {
-      preview.textContent = `📍 Coordenadas fijadas: ${originCoords.lat}, ${originCoords.lng}`;
+      preview.innerHTML = `<span class="material-symbols-outlined" style="font-size: 14px; margin-right: 4px;">pin_drop</span> Coordenadas: ${originCoords.lat}, ${originCoords.lng}`;
       preview.style.display = 'inline-flex';
     } else {
       preview.style.display = 'none';
@@ -487,7 +487,7 @@ function renderCoordsPreview(target) {
   } else {
     const preview = document.getElementById('dest-coords-preview');
     if (destinationCoords) {
-      preview.textContent = `📍 Coordenadas fijadas: ${destinationCoords.lat}, ${destinationCoords.lng}`;
+      preview.innerHTML = `<span class="material-symbols-outlined" style="font-size: 14px; margin-right: 4px;">pin_drop</span> Coordenadas: ${destinationCoords.lat}, ${destinationCoords.lng}`;
       preview.style.display = 'inline-flex';
     } else {
       preview.style.display = 'none';
@@ -673,11 +673,11 @@ function renderDashboard(check) {
     const trafficPill = document.getElementById('traffic-pill-tag');
     if (trafficPill) {
       if (trafficResult.isSimulation) {
-        trafficPill.textContent = '🟡 Modo Simulación';
+        trafficPill.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; margin-right: 4px; color: #e37400;">science</span> Modo Simulación';
         trafficPill.style.background = '#fef7e0';
         trafficPill.style.color = '#e37400';
       } else {
-        trafficPill.textContent = '🟢 Tráfico en vivo';
+        trafficPill.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px; margin-right: 4px; color: #137333;">sensors</span> Tráfico en vivo';
         trafficPill.style.background = '#e6f4ea';
         trafficPill.style.color = '#137333';
       }
@@ -686,7 +686,7 @@ function renderDashboard(check) {
 
   if (!schedule) {
     alertBox.className = 'gmaps-alert-banner alert-normal';
-    alertIcon.textContent = 'ℹ️';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">info</span>';
     alertText.textContent = statusMessage || 'Esperando inicio del monitoreo';
     bigTime.style.color = 'var(--gmaps-blue)';
     return;
@@ -703,7 +703,7 @@ function renderDashboard(check) {
 
   if (schedule.mustLeaveNow) {
     alertBox.className = 'gmaps-alert-banner alert-urgent';
-    alertIcon.textContent = '🚨';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-red);">notification_important</span>';
     alertText.textContent = `¡DEBES SALIR YA! Tráfico pesado detectado.`;
     bigTime.style.color = 'var(--gmaps-red)';
     countdownText.textContent = `¡Sal de inmediato para llegar a tiempo!`;
@@ -713,7 +713,7 @@ function renderDashboard(check) {
 
   if (schedule.isForTomorrow) {
     alertBox.className = 'gmaps-alert-banner alert-completed';
-    alertIcon.textContent = '🌙';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">bedtime</span>';
     alertText.textContent = statusMessage;
     bigTime.style.color = 'var(--gmaps-blue)';
     countdownText.textContent = `Próximo monitoreo mañana temprano.`;
@@ -723,7 +723,7 @@ function renderDashboard(check) {
 
   if (schedule.inWindow) {
     alertBox.className = 'gmaps-alert-banner alert-normal';
-    alertIcon.textContent = '🟢';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-green);">check_circle</span>';
     alertText.textContent = `Monitoreo matutino activo. Tráfico actual: ${trafficResult.durationText}.`;
     bigTime.style.color = 'var(--gmaps-green)';
     countdownText.textContent = `Te quedan aproximadamente ${formatMinutes(schedule.minutesUntilDeparture)} para salir.`;
@@ -732,7 +732,7 @@ function renderDashboard(check) {
   }
 
   alertBox.className = 'gmaps-alert-banner alert-waiting';
-  alertIcon.textContent = '⏳';
+  alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">hourglass_empty</span>';
   alertText.textContent = `En espera. Tu salida de hoy está prevista para las ${schedule.departureTimeFormatted}.`;
   bigTime.style.color = 'var(--gmaps-orange)';
   countdownText.textContent = `Faltan ${formatMinutes(schedule.minutesUntilDeparture)} para la salida.`;
