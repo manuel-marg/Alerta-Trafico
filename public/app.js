@@ -712,7 +712,7 @@ async function checkTrafficNow(force = false) {
 function renderDashboard(check) {
   if (!check) return;
 
-  const { trafficResult, schedule, statusMessage, pendingConfig } = check;
+  const { trafficResult, schedule, statusMessage, pendingConfig, alreadyNotifiedToday } = check;
 
   const alertBox = document.getElementById('alert-status-box');
   const alertIcon = document.getElementById('alert-status-icon');
@@ -722,11 +722,11 @@ function renderDashboard(check) {
   const statTraffic = document.getElementById('stat-traffic-duration');
 
   if (pendingConfig) {
-    alertBox.className = 'alert-banner alert-waiting';
-    alertIcon.textContent = '⚙️';
+    alertBox.className = 'gmaps-alert-banner alert-waiting';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px;">settings</span>';
     alertText.textContent = statusMessage;
     bigTime.textContent = '--:--';
-    countdownText.textContent = 'Configura tu ruta en el formulario abajo';
+    countdownText.textContent = 'Configura tu ruta en el mapa arriba';
     return;
   }
 
@@ -771,6 +771,17 @@ function renderDashboard(check) {
     return `${h}h ${m}m`;
   };
 
+  // Si la alerta de hoy ya fue entregada y todavía no pasa la hora objetivo -> Banner Verde (Success)
+  if (alreadyNotifiedToday && !schedule.isForTomorrow) {
+    alertBox.className = 'gmaps-alert-banner alert-normal';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-green);">check_circle</span>';
+    alertText.textContent = 'Alerta de hoy ya entregada. ¡Buen viaje!';
+    bigTime.style.color = 'var(--gmaps-green)';
+    countdownText.textContent = 'Alarma matutina completada por hoy.';
+    countdownText.style.color = 'var(--gmaps-green-dark)';
+    return;
+  }
+
   if (schedule.mustLeaveNow) {
     alertBox.className = 'gmaps-alert-banner alert-urgent';
     alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-red);">notification_important</span>';
@@ -781,6 +792,7 @@ function renderDashboard(check) {
     return;
   }
 
+  // Si ya pasó la hora objetivo de hoy -> Banner Azul (Info) descansando hasta mañana
   if (schedule.isForTomorrow) {
     alertBox.className = 'gmaps-alert-banner alert-completed';
     alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">bedtime</span>';

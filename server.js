@@ -418,20 +418,21 @@ async function evaluateUserCommute(userId, forceQuery = false) {
       durationSeconds: baselineDuration * 60,
       durationText: `${baselineDuration} min`,
       distanceText: 'Calculando...',
-      trafficSummary: 'Modo reposo (Consumo optimizado: 0 consultas de cuota)'
+      trafficSummary: 'En espera hasta la hora programada'
     };
   }
 
   const finalDuration = trafficResult.success ? trafficResult.durationMinutes : baselineDuration;
   const schedule = getNextTripSchedule(config.targetArrivalTime, buffer, finalDuration, windowMinutes);
 
+  let notifiedTodayFlag = alreadyNotifiedToday;
   let statusMessage = '';
   if (!trafficResult.success) {
     statusMessage = trafficResult.error;
-  } else if (alreadyNotifiedToday) {
-    statusMessage = `✅ Alerta de hoy ya entregada. Descansando hasta mañana (0 consultas a Google).`;
+  } else if (alreadyNotifiedToday && !schedule.isForTomorrow) {
+    statusMessage = 'Alerta de hoy ya entregada. ¡Buen viaje!';
   } else if (schedule.isForTomorrow) {
-    statusMessage = `Jornada de hoy completada. Próxima salida programada para mañana a las ${schedule.departureTimeFormatted}.`;
+    statusMessage = `Descansando hasta mañana. Próxima salida programada para las ${schedule.departureTimeFormatted}.`;
   } else if (schedule.mustLeaveNow) {
     statusMessage = `¡DEBES SALIR YA! Tráfico: ${trafficResult.durationText}. Margen: ${buffer}m. Llegada meta: ${config.targetArrivalTime}.`;
   } else if (schedule.inWindow) {
@@ -453,11 +454,14 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     });
 
     db.saveUserConfig(userId, { lastNotificationDate: todayStr });
+    notifiedTodayFlag = true;
+    statusMessage = 'Alerta de hoy ya entregada. ¡Buen viaje!';
   }
 
   const lastCheck = {
     timestamp: new Date().toISOString(),
     pendingConfig: false,
+    alreadyNotifiedToday: Boolean(notifiedTodayFlag),
     trafficResult,
     schedule,
     statusMessage
