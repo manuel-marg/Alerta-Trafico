@@ -8,7 +8,6 @@ adb/
 # Archivos de configuración y claves sensibles
 data/*.json
 !data/config.example.json
-data/*.sqlite
-data/*.db
-data/*.sqlite-journal
+data/*.sqlite*
+data/*.db*
 
