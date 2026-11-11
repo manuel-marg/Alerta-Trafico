@@ -50,13 +50,12 @@ Alerta-Trafico/
 * **Target Host:** `192.168.1.102` (Port `8022`, User: `u0_a141`)
 * **Deploy latest code to phone:**
   ```bash
-  cd ~/Alerta-Trafico && git checkout data/config.json && git pull origin main
-  pkill -f "node server.js" || true
-  nohup node server.js </dev/null >~/server.log 2>&1 &
+  cd ~/Alerta-Trafico && git pull origin main
+  pkill -f "server.js" || true
   ```
 * **Verify phone status:**
   ```bash
-  ps aux | grep "node server.js"
+  ps aux | grep "server.js"
   tail -n 25 ~/server.log
   ```
 * **Cloudflare Tunnel Status:**
