@@ -82,26 +82,41 @@ body {
 .gmaps-search-card {
   background: var(--gmaps-surface);
   border: 1px solid var(--gmaps-border);
-  border-radius: 28px;
-  padding: 10px 16px;
+  border-radius: 24px;
+  padding: 12px 16px;
   box-shadow: var(--gmaps-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.gmaps-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  width: 100%;
+  gap: 10px;
 }
 
 .logo-group {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .gmaps-icon-badge {
   background: var(--gmaps-blue);
   color: white;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -115,24 +130,157 @@ body {
   font-weight: 500;
   color: var(--gmaps-text-primary);
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gmaps-subtitle {
   font-size: 0.78rem;
   color: var(--gmaps-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.badges-group {
+/* User Account Icon & Dropdown estilo Google Maps */
+.gmaps-account-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.gmaps-avatar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #ea4335;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(60,64,67,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.gmaps-avatar-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(60,64,67,0.35);
+}
+
+.gmaps-avatar-btn:active {
+  transform: scale(0.96);
+}
+
+.gmaps-account-dropdown {
+  position: absolute;
+  top: 44px;
+  right: 0;
+  width: 250px;
+  background: #ffffff;
+  border: 1px solid var(--gmaps-border);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(60, 64, 67, 0.22);
+  padding: 14px;
+  z-index: 10002;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.dropdown-user-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dropdown-avatar-big {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #ea4335;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.dropdown-user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dropdown-user-info strong {
+  font-size: 0.92rem;
+  color: var(--gmaps-text-primary);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-user-info span {
+  font-size: 0.76rem;
+  color: var(--gmaps-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--gmaps-border-subtle);
+  margin: 2px 0;
+}
+
+.dropdown-logout-btn {
+  width: 100%;
+  padding: 8px 12px;
+  background: #fce8e6;
+  color: #d93025;
+  border: 1px solid rgba(217, 48, 37, 0.2);
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
+  transition: background 0.15s ease;
+}
+
+.dropdown-logout-btn:hover {
+  background: #fad2cf;
+}
+
+/* Fila inferior de Badges */
+.gmaps-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid var(--gmaps-border-subtle);
 }
 
 .badge {
   font-size: 0.72rem;
   font-weight: 500;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 16px;
   display: inline-flex;
   align-items: center;
@@ -172,48 +320,6 @@ body {
   background: var(--gmaps-red);
 }
 
-/* User Account Pill in Google Maps Header */
-.user-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--gmaps-surface-variant);
-  border: 1px solid var(--gmaps-border);
-  padding: 3px 8px 3px 4px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--gmaps-text-primary);
-}
-
-.user-avatar-circle {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #ea4335;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: bold;
-}
-
-.btn-logout-gmaps {
-  background: none;
-  border: none;
-  color: var(--gmaps-red);
-  font-size: 0.72rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  margin-left: 2px;
-}
-
-.btn-logout-gmaps:hover {
-  text-decoration: underline;
-}
 
 .gmaps-pill-btn {
   background: var(--gmaps-blue-tonal);
@@ -978,6 +1084,34 @@ label {
 }
 
 @media (max-width: 500px) {
+  body {
+    padding: 10px 8px;
+  }
+  .gmaps-search-card {
+    border-radius: 20px;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .gmaps-title {
+    font-size: 1.05rem;
+  }
+  .gmaps-subtitle {
+    font-size: 0.72rem;
+  }
+  .badge {
+    font-size: 0.68rem;
+    padding: 3px 8px;
+  }
+  .gmaps-avatar-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 0.88rem;
+  }
+  .gmaps-account-dropdown {
+    width: calc(100vw - 36px);
+    max-width: 280px;
+    right: -4px;
+  }
   .gmaps-actions-row {
     grid-template-columns: 1fr;
   }
@@ -985,9 +1119,19 @@ label {
     grid-template-columns: 1fr;
   }
   .gmaps-stats-chips {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .gmaps-stat-chip {
+    padding: 8px 4px;
+  }
+  .stat-chip-val {
+    font-size: 0.95rem;
+  }
+  .stat-chip-lbl {
+    font-size: 0.65rem;
   }
   .gmaps-big-time {
-    font-size: 2.8rem;
+    font-size: 2.5rem;
   }
 }

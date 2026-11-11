@@ -24,27 +24,47 @@
   <div class="container">
     <!-- Google Maps Floating Header Card -->
     <header class="gmaps-search-card">
-      <div class="logo-group">
-        <div class="gmaps-icon-badge">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-          </svg>
+      <div class="gmaps-header-top">
+        <div class="logo-group">
+          <div class="gmaps-icon-badge">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
+          <div class="header-titles">
+            <h1 class="gmaps-title">Alerta de Tráfico</h1>
+            <p class="gmaps-subtitle">Despertador dinámico en tiempo real</p>
+          </div>
         </div>
-        <div>
-          <h1 class="gmaps-title">Alerta de Tráfico</h1>
-          <p class="gmaps-subtitle">Despertador dinámico en tiempo real</p>
+
+        <!-- Google Maps Style User Account Circle (Top Right) -->
+        <div class="gmaps-account-wrapper">
+          <button type="button" id="btn-user-avatar" class="gmaps-avatar-btn" title="Mi Cuenta" style="display: none;">
+            <span id="user-avatar-initial">M</span>
+          </button>
+          <button type="button" id="btn-open-login" class="gmaps-pill-btn" style="display: none;">
+            Acceder
+          </button>
+
+          <!-- Dropdown Popover de Perfil estilo Google -->
+          <div id="user-dropdown" class="gmaps-account-dropdown" style="display: none;">
+            <div class="dropdown-user-header">
+              <div class="dropdown-avatar-big" id="dropdown-avatar-initial">M</div>
+              <div class="dropdown-user-info">
+                <strong id="dropdown-user-name">Manuel</strong>
+                <span id="dropdown-user-email">admin@alerta.local</span>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <button type="button" id="btn-logout" class="dropdown-logout-btn">
+              🚪 Cerrar sesión
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="badges-group">
-        <div id="user-profile-pill" class="user-pill" style="display: none;">
-          <div class="user-avatar-circle" id="user-avatar-initial">M</div>
-          <span id="user-display-name">Manuel</span>
-          <button type="button" id="btn-logout" class="btn-logout-gmaps" title="Cerrar sesión">Salir</button>
-        </div>
-        <button type="button" id="btn-open-login" class="gmaps-pill-btn" style="display: none;">
-          👤 Acceder
-        </button>
+      <!-- Fila inferior de Badges (Push y Modo API) -->
+      <div class="gmaps-header-badges">
         <span id="badge-push" class="badge badge-yellow">
           <span class="badge-dot"></span>
           <span id="badge-push-text">Push: Pendiente</span>

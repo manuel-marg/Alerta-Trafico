@@ -47,19 +47,29 @@ async function checkAuthStatus() {
     const resp = await fetch('/api/auth/me');
     const data = await resp.json();
 
-    const pill = document.getElementById('user-profile-pill');
+    const btnUserAvatar = document.getElementById('btn-user-avatar');
     const btnOpenLogin = document.getElementById('btn-open-login');
-    const nameSpan = document.getElementById('user-display-name');
+    const userDropdown = document.getElementById('user-dropdown');
 
     if (data.loggedIn && data.user) {
       currentUser = data.user;
-      nameSpan.textContent = currentUser.name || currentUser.email;
-      const initialEl = document.getElementById('user-avatar-initial');
-      if (initialEl) {
-        initialEl.textContent = (currentUser.name || currentUser.email).charAt(0).toUpperCase();
-      }
-      pill.style.display = 'inline-flex';
-      btnOpenLogin.style.display = 'none';
+      const initial = (currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase();
+
+      const avatarInitial = document.getElementById('user-avatar-initial');
+      if (avatarInitial) avatarInitial.textContent = initial;
+
+      const dropAvatar = document.getElementById('dropdown-avatar-initial');
+      if (dropAvatar) dropAvatar.textContent = initial;
+
+      const dropName = document.getElementById('dropdown-user-name');
+      if (dropName) dropName.textContent = currentUser.name || 'Usuario';
+
+      const dropEmail = document.getElementById('dropdown-user-email');
+      if (dropEmail) dropEmail.textContent = currentUser.email || '';
+
+      if (btnUserAvatar) btnUserAvatar.style.display = 'flex';
+      if (btnOpenLogin) btnOpenLogin.style.display = 'none';
+      if (userDropdown) userDropdown.style.display = 'none';
       closeAuthModal();
 
       await loadConfig();
@@ -67,8 +77,9 @@ async function checkAuthStatus() {
       await syncPushSubscriptionIfGranted();
     } else {
       currentUser = null;
-      pill.style.display = 'none';
-      btnOpenLogin.style.display = 'inline-flex';
+      if (btnUserAvatar) btnUserAvatar.style.display = 'none';
+      if (btnOpenLogin) btnOpenLogin.style.display = 'inline-flex';
+      if (userDropdown) userDropdown.style.display = 'none';
       // Abrir modal de autenticación si no ha iniciado sesión
       showAuthModal('login');
     }
@@ -183,6 +194,8 @@ async function handleRegisterSubmit(e) {
 
 async function handleLogout() {
   try {
+    const userDropdown = document.getElementById('user-dropdown');
+    if (userDropdown) userDropdown.style.display = 'none';
     await fetch('/api/auth/logout', { method: 'POST' });
     showToast('👋 Sesión cerrada correctamente');
     await checkAuthStatus();
@@ -739,7 +752,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initServiceWorker();
   await checkAuthStatus();
 
-  // Botones de Autenticación
+  // Botones de Autenticación y Dropdown Avatar estilo Google Maps
+  const btnUserAvatar = document.getElementById('btn-user-avatar');
+  const userDropdown = document.getElementById('user-dropdown');
+
+  if (btnUserAvatar && userDropdown) {
+    btnUserAvatar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = userDropdown.style.display === 'flex';
+      userDropdown.style.display = isVisible ? 'none' : 'flex';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!userDropdown.contains(e.target) && e.target !== btnUserAvatar) {
+        userDropdown.style.display = 'none';
+      }
+    });
+  }
+
   document.getElementById('btn-open-login').addEventListener('click', () => showAuthModal('login'));
   document.getElementById('btn-logout').addEventListener('click', handleLogout);
   document.getElementById('btn-close-auth-modal').addEventListener('click', closeAuthModal);
