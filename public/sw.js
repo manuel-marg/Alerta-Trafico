@@ -1,12 +1,19 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v12';
+const CACHE_NAME = 'alerta-trafico-v14';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
   '/app.js',
-  '/manifest.json'
+  '/manifest.json',
+  '/fonts/fonts.css',
+  '/fonts/google-sans-latin.woff2',
+  '/fonts/google-sans-latin-ext.woff2',
+  '/fonts/roboto-latin.woff2',
+  '/fonts/roboto-latin-ext.woff2',
+  '/fonts/material-symbols-outlined.woff2',
+  '/icons/android-chrome-192x192.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -44,8 +51,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || '🚗 ¡Es hora de salir!';
   const options = {
     body: data.body || 'Revisa el tráfico actual para llegar a tiempo.',
-    icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/icon-192.png',
+    icon: data.icon || '/icons/android-chrome-192x192.png',
+    badge: data.badge || '/icons/android-chrome-192x192.png',
     tag: data.tag || 'traffic-alert',
     renotify: true,
     vibrate: [200, 100, 200, 100, 200],

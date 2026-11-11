@@ -8,11 +8,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.use('/fonts', express.static(path.join(__dirname, 'public', 'fonts'), {
+  maxAge: '30d',
+  immutable: true
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_DIR = path.join(__dirname, 'data');
 const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const PUSH_ICON_URL = '/icons/android-chrome-192x192.png';
 
 // Clave maestra global de Google Maps API (compartida para todos los usuarios registrados)
 function getSystemGoogleMapsApiKey() {
@@ -433,8 +438,8 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     await sendUserPush(userId, {
       title: '🚗 ¡Hora de salir hacia tu destino!',
       body: `El tráfico hoy es de ${trafficResult.durationText} (+${buffer}m de margen). Sal ahora para llegar a las ${config.targetArrivalTime}.`,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: PUSH_ICON_URL,
+      badge: PUSH_ICON_URL,
       tag: 'commute-alert-today',
       url: '/'
     });
@@ -577,8 +582,8 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
   const result = await sendUserPush(req.user.id, {
     title: title || '🔔 Prueba de Notificación - Alerta Tráfico',
     body: body || `¡Hola ${req.user.name}! Las notificaciones Web Push están activas para tu cuenta.`,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    icon: PUSH_ICON_URL,
+    badge: PUSH_ICON_URL,
     tag: 'test-notification',
     url: '/'
   });
