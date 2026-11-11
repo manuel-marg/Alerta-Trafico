@@ -1,8 +1,9 @@
-// Lógica del cliente PWA, Web Push y Mapa OpenStreetMap (Leaflet)
+// Lógica del cliente PWA, Web Push, Multi-usuario y Mapa OpenStreetMap (Leaflet)
 
 let swRegistration = null;
 let currentConfig = null;
 let lastCheckData = null;
+let currentUser = null;
 
 // Coordenadas guardadas
 let originCoords = null;
@@ -40,7 +41,153 @@ function showToast(message) {
   }, 4000);
 }
 
-// --- 1. Inicialización de Service Worker y Web Push ---
+// --- 1. Autenticación y Gestión de Sesión Multi-usuario ---
+async function checkAuthStatus() {
+  try {
+    const resp = await fetch('/api/auth/me');
+    const data = await resp.json();
+
+    const pill = document.getElementById('user-profile-pill');
+    const btnOpenLogin = document.getElementById('btn-open-login');
+    const nameSpan = document.getElementById('user-display-name');
+
+    if (data.loggedIn && data.user) {
+      currentUser = data.user;
+      nameSpan.textContent = currentUser.name || currentUser.email;
+      pill.style.display = 'inline-flex';
+      btnOpenLogin.style.display = 'none';
+      closeAuthModal();
+
+      await loadConfig();
+      await checkTrafficNow();
+      await syncPushSubscriptionIfGranted();
+    } else {
+      currentUser = null;
+      pill.style.display = 'none';
+      btnOpenLogin.style.display = 'inline-flex';
+      // Abrir modal de autenticación si no ha iniciado sesión
+      showAuthModal('login');
+    }
+  } catch (err) {
+    console.error('Error verificando sesión:', err);
+  }
+}
+
+function showAuthModal(defaultTab = 'login') {
+  const modal = document.getElementById('auth-modal');
+  modal.style.display = 'flex';
+  switchAuthTab(defaultTab);
+  clearAuthError();
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('auth-modal');
+  modal.style.display = 'none';
+  clearAuthError();
+}
+
+function switchAuthTab(tab) {
+  const tabLogin = document.getElementById('tab-login');
+  const tabRegister = document.getElementById('tab-register');
+  const formLogin = document.getElementById('form-login');
+  const formRegister = document.getElementById('form-register');
+  const title = document.getElementById('auth-modal-title');
+
+  clearAuthError();
+
+  if (tab === 'register') {
+    tabRegister.classList.add('active');
+    tabLogin.classList.remove('active');
+    formRegister.style.display = 'flex';
+    formLogin.style.display = 'none';
+    title.textContent = 'Crear Nueva Cuenta';
+  } else {
+    tabLogin.classList.add('active');
+    tabRegister.classList.remove('active');
+    formLogin.style.display = 'flex';
+    formRegister.style.display = 'none';
+    title.textContent = 'Iniciar Sesión';
+  }
+}
+
+function showAuthError(msg) {
+  const box = document.getElementById('auth-error-box');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+
+function clearAuthError() {
+  const box = document.getElementById('auth-error-box');
+  box.style.display = 'none';
+  box.textContent = '';
+}
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  clearAuthError();
+
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      showToast(`👋 ¡Bienvenido, ${data.user.name}!`);
+      document.getElementById('form-login').reset();
+      await checkAuthStatus();
+    } else {
+      showAuthError(data.error || 'Credenciales inválidas.');
+    }
+  } catch (err) {
+    showAuthError('Error de red al conectar con el servidor.');
+  }
+}
+
+async function handleRegisterSubmit(e) {
+  e.preventDefault();
+  clearAuthError();
+
+  const name = document.getElementById('reg-name').value;
+  const email = document.getElementById('reg-email').value;
+  const password = document.getElementById('reg-password').value;
+
+  try {
+    const resp = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      showToast(`🎉 ¡Cuenta creada con éxito! Bienvenido, ${data.user.name}`);
+      document.getElementById('form-register').reset();
+      await checkAuthStatus();
+    } else {
+      showAuthError(data.error || 'No se pudo crear la cuenta.');
+    }
+  } catch (err) {
+    showAuthError('Error de red al conectar con el servidor.');
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    showToast('👋 Sesión cerrada correctamente');
+    await checkAuthStatus();
+  } catch (err) {
+    showToast('Error al cerrar sesión');
+  }
+}
+
+// --- 2. Inicialización de Service Worker y Web Push ---
 async function initServiceWorker() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     updatePushBadge('error', 'Push no soportado');
@@ -51,23 +198,33 @@ async function initServiceWorker() {
   try {
     swRegistration = await navigator.serviceWorker.register('/sw.js');
     console.log('✅ Service Worker registrado con éxito:', swRegistration.scope);
+    await syncPushSubscriptionIfGranted();
+  } catch (err) {
+    console.error('Error registrando el Service Worker:', err);
+    updatePushBadge('error', 'Error Push');
+  }
+}
 
+async function syncPushSubscriptionIfGranted() {
+  if (!swRegistration) return;
+  try {
     const subscription = await swRegistration.pushManager.getSubscription();
     if (subscription && Notification.permission === 'granted') {
       updatePushBadge('active', 'Push Activo');
       document.getElementById('push-activation-card').style.display = 'none';
-      await fetch('/api/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(subscription)
-      });
+      if (currentUser) {
+        await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(subscription)
+        });
+      }
     } else {
       updatePushBadge('pending', 'Push Inactivo');
       document.getElementById('push-activation-card').style.display = 'flex';
     }
-  } catch (err) {
-    console.error('Error registrando el Service Worker:', err);
-    updatePushBadge('error', 'Error Push');
+  } catch (e) {
+    console.error('Error sincronizando push:', e);
   }
 }
 
@@ -87,6 +244,12 @@ function updatePushBadge(status, label) {
 }
 
 async function subscribeUserToPush() {
+  if (!currentUser) {
+    showToast('⚠️ Inicia sesión para activar las notificaciones en tu cuenta');
+    showAuthModal('login');
+    return;
+  }
+
   if (!swRegistration) {
     showToast('❌ El Service Worker aún no está listo');
     return;
@@ -117,30 +280,27 @@ async function subscribeUserToPush() {
 
     updatePushBadge('active', 'Push Activo');
     document.getElementById('push-activation-card').style.display = 'none';
-    showToast('🎉 ¡Notificaciones Push activadas con éxito!');
+    showToast('🎉 ¡Notificaciones Push activadas para tu cuenta!');
   } catch (err) {
     console.error('Error suscribiendo al usuario:', err);
     showToast('❌ Error activando las notificaciones');
   }
 }
 
-// --- 2. Leaflet & OpenStreetMap (Mapa Gratuito y Open Source) ---
+// --- 3. Leaflet & OpenStreetMap (Mapa Gratuito y Open Source) ---
 function initLeafletMap() {
   if (leafletMap) return;
 
-  // Centro por defecto
   const defaultLat = 10.4900;
   const defaultLng = -66.8600;
 
   leafletMap = L.map('map-container').setView([defaultLat, defaultLng], 13);
 
-  // Tiles de OpenStreetMap (100% libre, sin API Keys ni tarjetas)
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }).addTo(leafletMap);
 
-  // Al hacer clic en el mapa, mover o colocar el pin
   leafletMap.on('click', async (e) => {
     const { lat, lng } = e.latlng;
     setPinOnMap(lat, lng);
@@ -166,7 +326,6 @@ function setPinOnMap(lat, lng) {
   document.getElementById('pin-coords-text').textContent = `Coordenadas: ${selectedPinData.lat}, ${selectedPinData.lng}`;
 }
 
-// Obtener dirección legible gratis mediante OpenStreetMap Nominatim
 async function reverseGeocode(lat, lng) {
   const addressText = document.getElementById('pin-address-text');
   addressText.textContent = 'Buscando nombre de la calle/zona...';
@@ -179,7 +338,6 @@ async function reverseGeocode(lat, lng) {
     const data = await resp.json();
 
     if (data && data.display_name) {
-      // Limpiar nombre corto (calle, barrio o nombre principal)
       const parts = data.display_name.split(',');
       const shortAddress = parts.slice(0, 3).join(',').trim();
       selectedPinData.address = shortAddress || data.display_name;
@@ -194,7 +352,6 @@ async function reverseGeocode(lat, lng) {
   }
 }
 
-// Buscador de lugares en el mapa con Nominatim
 async function searchPlaces(query) {
   const resultsContainer = document.getElementById('map-search-results');
   if (!query || query.trim().length < 3) {
@@ -219,73 +376,69 @@ async function searchPlaces(query) {
     items.forEach((item) => {
       const div = document.createElement('div');
       div.className = 'search-result-item';
-      div.textContent = item.display_name;
+      div.innerHTML = `<strong>${item.name || item.display_name.split(',')[0]}</strong><br><small style="color: #94a3b8;">${item.display_name}</small>`;
       div.addEventListener('click', async () => {
         const lat = parseFloat(item.lat);
-        const lng = parseFloat(item.lon);
+        const lon = parseFloat(item.lon);
         resultsContainer.style.display = 'none';
-        leafletMap.setView([lat, lng], 16);
-        setPinOnMap(lat, lng);
-        selectedPinData.address = item.display_name.split(',').slice(0, 3).join(',').trim();
+        leafletMap.setView([lat, lon], 17);
+        setPinOnMap(lat, lon);
+        const parts = item.display_name.split(',');
+        selectedPinData.address = parts.slice(0, 3).join(',').trim();
         document.getElementById('pin-address-text').textContent = `📍 ${selectedPinData.address}`;
       });
       resultsContainer.appendChild(div);
     });
-  } catch (err) {
-    resultsContainer.innerHTML = '<div class="search-result-item" style="color: #fb7185;">Error al buscar en el mapa</div>';
+  } catch (e) {
+    resultsContainer.innerHTML = '<div class="search-result-item" style="color: #f87171;">Error al buscar.</div>';
   }
 }
 
-// Abrir el modal de selección de mapa
 function openMapModal(target) {
   currentPickerTarget = target;
   const modal = document.getElementById('map-modal');
   const title = document.getElementById('modal-map-title');
-  const searchInput = document.getElementById('map-search-input');
-  document.getElementById('map-search-results').style.display = 'none';
-  searchInput.value = '';
+  const addressText = document.getElementById('pin-address-text');
+  const coordsText = document.getElementById('pin-coords-text');
 
   if (target === 'origin') {
-    title.textContent = '🏠 Seleccionar Ubicación de Casa (Origen)';
+    title.textContent = '📍 Fijar Punto de Partida (Casa)';
   } else {
-    title.textContent = '🏢 Seleccionar Ubicación del Trabajo (Destino)';
+    title.textContent = '📍 Fijar Destino (Oficina / Trabajo)';
   }
 
   modal.style.display = 'flex';
-
   setTimeout(() => {
     initLeafletMap();
     leafletMap.invalidateSize();
 
-    // Si ya tiene coordenadas previas, enfocar allí
-    const existingCoords = target === 'origin' ? originCoords : destinationCoords;
-    const existingText = document.getElementById(target === 'origin' ? 'input-origin' : 'input-destination').value;
-
-    if (existingCoords && existingCoords.lat && existingCoords.lng) {
-      leafletMap.setView([existingCoords.lat, existingCoords.lng], 16);
-      setPinOnMap(existingCoords.lat, existingCoords.lng);
-      selectedPinData.address = existingText || '';
-      document.getElementById('pin-address-text').textContent = `📍 ${selectedPinData.address || 'Ubicación actual guardada'}`;
-    } else if (navigator.geolocation) {
-      // Intentar centrar en la ubicación del usuario si no tiene coords
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          leafletMap.setView([pos.coords.latitude, pos.coords.longitude], 14);
-        },
-        () => {},
-        { timeout: 5000 }
-      );
+    let targetCoords = target === 'origin' ? originCoords : destinationCoords;
+    if (targetCoords && targetCoords.lat && targetCoords.lng) {
+      leafletMap.setView([targetCoords.lat, targetCoords.lng], 16);
+      setPinOnMap(targetCoords.lat, targetCoords.lng);
+      const existingAddress = target === 'origin' 
+        ? document.getElementById('input-origin').value 
+        : document.getElementById('input-destination').value;
+      if (existingAddress) {
+        selectedPinData.address = existingAddress;
+        addressText.textContent = `📍 ${existingAddress}`;
+      }
+    } else {
+      coordsText.textContent = 'Coordenadas: --';
+      addressText.textContent = 'Haz clic en el mapa o busca arriba para colocar el pin...';
     }
-  }, 120);
+  }, 100);
 }
 
 function closeMapModal() {
   document.getElementById('map-modal').style.display = 'none';
+  document.getElementById('map-search-results').style.display = 'none';
+  document.getElementById('map-search-input').value = '';
 }
 
 function confirmPinSelection() {
   if (!selectedPinData.lat || !selectedPinData.lng) {
-    showToast('⚠️ Primero haz clic en el mapa para fijar un pin');
+    showToast('⚠️ Por favor haz clic en el mapa para colocar el pin primero');
     return;
   }
 
@@ -325,10 +478,17 @@ function renderCoordsPreview(target) {
   }
 }
 
-// --- 3. Cargar y Guardar Configuración ---
+// --- 4. Cargar y Guardar Configuración Personal ---
 async function loadConfig() {
+  if (!currentUser) return;
   try {
     const resp = await fetch('/api/config');
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        showAuthModal('login');
+      }
+      return;
+    }
     currentConfig = await resp.json();
 
     document.getElementById('input-origin').value = currentConfig.origin || '';
@@ -365,9 +525,14 @@ async function loadConfig() {
 }
 
 async function checkTrafficNow(force = false) {
+  if (!currentUser) return;
   try {
     document.getElementById('hero-last-check').textContent = 'Consultando...';
     const resp = await fetch(`/api/traffic-check${force ? '?force=true' : ''}`);
+    if (!resp.ok) {
+      document.getElementById('hero-last-check').textContent = 'Sin datos';
+      return;
+    }
     const data = await resp.json();
 
     if (data.success && data.check) {
@@ -382,69 +547,66 @@ async function checkTrafficNow(force = false) {
 }
 
 function renderDashboard(check) {
+  if (!check) return;
+
+  const { trafficResult, schedule, statusMessage, pendingConfig } = check;
+
   const alertBox = document.getElementById('alert-status-box');
   const alertIcon = document.getElementById('alert-status-icon');
   const alertText = document.getElementById('alert-status-text');
-  const departureDisplay = document.getElementById('big-departure-time');
+  const bigTime = document.getElementById('big-departure-time');
   const countdownText = document.getElementById('countdown-text');
   const statTraffic = document.getElementById('stat-traffic-duration');
 
-  if (!check) return;
-
-  if (check.pendingConfig) {
+  if (pendingConfig) {
     alertBox.className = 'alert-banner alert-waiting';
     alertIcon.textContent = '⚙️';
-    alertText.textContent = 'Faltan datos de origen o destino. Configura tus ubicaciones abajo.';
-    departureDisplay.textContent = '--:--';
-    countdownText.textContent = 'Pendiente configurar ruta';
-    statTraffic.textContent = '-- min';
+    alertText.textContent = statusMessage;
+    bigTime.textContent = '--:--';
+    countdownText.textContent = 'Configura tu ruta en el formulario abajo';
     return;
   }
 
-  const { trafficResult, schedule } = check;
+  if (trafficResult) {
+    statTraffic.textContent = trafficResult.durationText || `${trafficResult.durationMinutes} min`;
+    document.getElementById('display-origin').textContent = trafficResult.origin || currentConfig?.origin;
+    document.getElementById('display-destination').textContent = trafficResult.destination || currentConfig?.destination;
+  }
 
-  if (!trafficResult || !trafficResult.success) {
-    alertBox.className = 'alert-banner alert-leave-now';
-    alertIcon.textContent = '⚠️';
-    alertText.textContent = trafficResult?.error || 'No se pudo obtener información del tráfico.';
-    departureDisplay.textContent = '--:--';
+  if (!schedule) {
+    alertBox.className = 'alert-banner alert-normal';
+    alertIcon.textContent = 'ℹ️';
+    alertText.textContent = statusMessage || 'Esperando inicio del monitoreo';
     return;
   }
 
-  statTraffic.textContent = trafficResult.durationText;
+  bigTime.textContent = schedule.departureTimeFormatted || '--:--';
 
-  if (!schedule) return;
+  const formatMinutes = (mins) => {
+    if (mins < 60) return `${mins} minutos`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h ${m}m`;
+  };
 
-  departureDisplay.textContent = schedule.departureTimeFormatted;
-
-  function formatMinutes(min) {
-    if (min < 60) return `${min} minutos`;
-    const h = Math.floor(min / 60);
-    const m = min % 60;
-    return `${h} hora${h > 1 ? 's' : ''} y ${m} min`;
-  }
-
-  // CASO 1: Ya pasó la hora de llegada de hoy -> El próximo viaje es MAÑANA
-  if (schedule.isForTomorrow) {
-    alertBox.className = 'alert-banner alert-night';
-    alertIcon.textContent = '🌙';
-    alertText.textContent = `Jornada de hoy completada. Próxima llegada meta: Mañana a las ${currentConfig?.targetArrivalTime || '08:00'}.`;
-    countdownText.textContent = `Próxima salida mañana a las ${schedule.departureTimeFormatted} (faltan ${formatMinutes(schedule.minutesUntilDeparture)}).`;
-    countdownText.style.color = '#93c5fd';
-    return;
-  }
-
-  // CASO 2: Es hoy y ya es hora crítica de salir
   if (schedule.mustLeaveNow) {
-    alertBox.className = 'alert-banner alert-leave-now';
+    alertBox.className = 'alert-banner alert-urgent';
     alertIcon.textContent = '🚨';
-    alertText.textContent = `¡DEBES SALIR YA! El tráfico actual es de ${trafficResult.durationText}.`;
-    countdownText.textContent = '⚠️ Ya estás en la ventana crítica de salida para llegar puntual.';
+    alertText.textContent = `¡DEBES SALIR YA! Tráfico pesado detectado.`;
+    countdownText.textContent = `¡Sal de inmediato para llegar a tiempo!`;
     countdownText.style.color = '#fca5a5';
     return;
   }
 
-  // CASO 3: Es hoy y estamos en la ventana de monitoreo matutino
+  if (schedule.isForTomorrow) {
+    alertBox.className = 'alert-banner alert-completed';
+    alertIcon.textContent = '🌙';
+    alertText.textContent = statusMessage;
+    countdownText.textContent = `Próximo monitoreo mañana temprano.`;
+    countdownText.style.color = '#cbd5e1';
+    return;
+  }
+
   if (schedule.inWindow) {
     alertBox.className = 'alert-banner alert-normal';
     alertIcon.textContent = '🟢';
@@ -454,7 +616,6 @@ function renderDashboard(check) {
     return;
   }
 
-  // CASO 4: Es hoy pero antes de la ventana de monitoreo
   alertBox.className = 'alert-banner alert-waiting';
   alertIcon.textContent = '⏳';
   alertText.textContent = `En espera. Tu salida de hoy está prevista para las ${schedule.departureTimeFormatted}.`;
@@ -463,6 +624,12 @@ function renderDashboard(check) {
 }
 
 async function triggerTestNotification() {
+  if (!currentUser) {
+    showToast('⚠️ Inicia sesión para probar las notificaciones de tu cuenta');
+    showAuthModal('login');
+    return;
+  }
+
   try {
     showToast('Enviando notificación de prueba...');
     const resp = await fetch('/api/test-notification', {
@@ -470,14 +637,14 @@ async function triggerTestNotification() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: '🚗 Prueba de Alerta de Tráfico',
-        body: '¡Esta es una notificación push de prueba! Tu navegador está listo para avisarte en la mañana.'
+        body: `¡Hola ${currentUser.name}! Las notificaciones push funcionan en tu dispositivo.`
       })
     });
     const result = await resp.json();
     if (result.sentTo > 0) {
       showToast(`✅ Notificación enviada a ${result.sentTo} dispositivo(s)`);
     } else {
-      showToast('⚠️ No hay dispositivos suscritos. Haz clic en "Activar Notificaciones" primero.');
+      showToast('⚠️ No hay dispositivos suscritos. Haz clic en "Activar" arriba primero.');
     }
   } catch (err) {
     showToast('❌ Error al enviar la notificación de prueba');
@@ -486,6 +653,12 @@ async function triggerTestNotification() {
 
 async function handleConfigSubmit(e) {
   e.preventDefault();
+
+  if (!currentUser) {
+    showToast('⚠️ Por favor inicia sesión primero para guardar tu configuración');
+    showAuthModal('login');
+    return;
+  }
 
   const origin = document.getElementById('input-origin').value;
   const destination = document.getElementById('input-destination').value;
@@ -511,7 +684,7 @@ async function handleConfigSubmit(e) {
     });
 
     if (resp.ok) {
-      showToast('💾 Configuración guardada correctamente con tus ubicaciones');
+      showToast('💾 Configuración guardada correctamente en tu cuenta');
       await loadConfig();
       await checkTrafficNow();
     } else {
@@ -523,6 +696,7 @@ async function handleConfigSubmit(e) {
 }
 
 async function resetTodayState() {
+  if (!currentUser) return;
   try {
     const resp = await fetch('/api/reset-today', { method: 'POST' });
     const data = await resp.json();
@@ -533,11 +707,30 @@ async function resetTodayState() {
   }
 }
 
-// --- 4. Event Listeners ---
+// --- 5. Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
   await initServiceWorker();
-  await loadConfig();
-  await checkTrafficNow();
+  await checkAuthStatus();
+
+  // Botones de Autenticación
+  document.getElementById('btn-open-login').addEventListener('click', () => showAuthModal('login'));
+  document.getElementById('btn-logout').addEventListener('click', handleLogout);
+  document.getElementById('btn-close-auth-modal').addEventListener('click', closeAuthModal);
+
+  document.getElementById('tab-login').addEventListener('click', () => switchAuthTab('login'));
+  document.getElementById('tab-register').addEventListener('click', () => switchAuthTab('register'));
+  document.getElementById('link-to-register').addEventListener('click', (e) => { e.preventDefault(); switchAuthTab('register'); });
+  document.getElementById('link-to-login').addEventListener('click', (e) => { e.preventDefault(); switchAuthTab('login'); });
+
+  document.getElementById('form-login').addEventListener('submit', handleLoginSubmit);
+  document.getElementById('form-register').addEventListener('submit', handleRegisterSubmit);
+
+  // Cerrar modal al hacer clic en fondo oscuro
+  document.getElementById('auth-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'auth-modal') {
+      closeAuthModal();
+    }
+  });
 
   // Botón activar push
   document.getElementById('btn-enable-push').addEventListener('click', subscribeUserToPush);
@@ -594,7 +787,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     );
   });
 
-  // Cerrar modal al hacer clic en el fondo oscuro
+  // Cerrar modal mapa en fondo oscuro
   document.getElementById('map-modal').addEventListener('click', (e) => {
     if (e.target.id === 'map-modal') {
       closeMapModal();
@@ -604,20 +797,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);
 
-  // Desplegable de guía (si existe)
-  const guideToggle = document.getElementById('guide-toggle');
-  const guideContent = document.getElementById('guide-content');
-  const guideChevron = document.getElementById('guide-chevron');
-
-  if (guideToggle && guideContent && guideChevron) {
-    guideToggle.addEventListener('click', () => {
-      const isHidden = guideContent.style.display === 'none';
-      guideContent.style.display = isHidden ? 'block' : 'none';
-      guideChevron.textContent = isHidden ? '▲' : '▼';
-    });
-  }
-
-  // Chequeo periódico cada 30 segundos en la vista abierta
+  // Chequeo periódico cada 30 segundos
   setInterval(() => {
     checkTrafficNow();
   }, 30 * 1000);
