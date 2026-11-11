@@ -197,6 +197,13 @@ async function handleLogout() {
     const userDropdown = document.getElementById('user-dropdown');
     if (userDropdown) userDropdown.style.display = 'none';
     await fetch('/api/auth/logout', { method: 'POST' });
+    originCoords = null;
+    destinationCoords = null;
+    currentConfig = null;
+    document.getElementById('input-origin').value = '';
+    document.getElementById('input-destination').value = '';
+    renderCoordsPreview('origin');
+    renderCoordsPreview('destination');
     showToast('👋 Sesión cerrada correctamente');
     await checkAuthStatus();
   } catch (err) {
@@ -453,26 +460,85 @@ function closeMapModal() {
   document.getElementById('map-search-input').value = '';
 }
 
-function confirmPinSelection() {
+// Guardar cambios parciales o completos directamente en la base de datos SQLite del usuario
+async function saveConfigPartial(payload, customToastMsg = null) {
+  if (!currentUser) {
+    showToast('⚠️ Inicia sesión para guardar tu configuración en tu cuenta');
+    showAuthModal('login');
+    return false;
+  }
+
+  try {
+    const resp = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.config) currentConfig = data.config;
+
+      if (payload.origin !== undefined) {
+        document.getElementById('display-origin').textContent = payload.origin || 'Sin configurar';
+      }
+      if (payload.destination !== undefined) {
+        document.getElementById('display-destination').textContent = payload.destination || 'Sin configurar';
+      }
+      if (payload.targetArrivalTime !== undefined) {
+        document.getElementById('stat-arrival-target').textContent = payload.targetArrivalTime || '--:--';
+      }
+      if (payload.bufferMinutes !== undefined) {
+        document.getElementById('stat-buffer').textContent = `${payload.bufferMinutes} min`;
+      }
+
+      if (customToastMsg) {
+        showToast(customToastMsg);
+      }
+
+      // Recalcular ruta en vivo automáticamente cuando cambia origen, destino u horario
+      const curOrigin = document.getElementById('input-origin').value;
+      const curDest = document.getElementById('input-destination').value;
+      if (curOrigin && curDest) {
+        await checkTrafficNow(true);
+      }
+      return true;
+    } else {
+      showToast('❌ Error al guardar en la base de datos');
+      return false;
+    }
+  } catch (err) {
+    console.error('Error guardando configuración:', err);
+    showToast('❌ Error de conexión al guardar');
+    return false;
+  }
+}
+
+async function confirmPinSelection() {
   if (!selectedPinData.lat || !selectedPinData.lng) {
     showToast('⚠️ Por favor haz clic en el mapa para colocar el pin primero');
     return;
   }
 
+  const payload = {};
   if (currentPickerTarget === 'origin') {
     originCoords = { lat: selectedPinData.lat, lng: selectedPinData.lng };
     const input = document.getElementById('input-origin');
     if (selectedPinData.address) input.value = selectedPinData.address;
     renderCoordsPreview('origin');
+    payload.origin = input.value;
+    payload.originCoords = originCoords;
   } else {
     destinationCoords = { lat: selectedPinData.lat, lng: selectedPinData.lng };
     const input = document.getElementById('input-destination');
     if (selectedPinData.address) input.value = selectedPinData.address;
     renderCoordsPreview('destination');
+    payload.destination = input.value;
+    payload.destinationCoords = destinationCoords;
   }
 
   closeMapModal();
-  showToast('📍 Ubicación fijada en el mapa con éxito');
+  await saveConfigPartial(payload, '💾 Ubicación guardada en tu cuenta');
 }
 
 function renderCoordsPreview(target) {
@@ -512,7 +578,7 @@ const WINDOW_HINTS = {
   60: 'Vigilancia continua y adaptativa desde 1 hora antes para detectar atascos tempranos.'
 };
 
-function setupSegmentedControl(containerId, hiddenInputId, badgeId, hintId, hintsMap) {
+function setupSegmentedControl(containerId, hiddenInputId, badgeId, hintId, hintsMap, configFieldKey = null) {
   const container = document.getElementById(containerId);
   if (!container) return;
   const hiddenInput = document.getElementById(hiddenInputId);
@@ -531,6 +597,9 @@ function setupSegmentedControl(containerId, hiddenInputId, badgeId, hintId, hint
       }
       if (hintEl && hintsMap && hintsMap[val]) {
         hintEl.textContent = hintsMap[val];
+      }
+      if (configFieldKey && currentUser) {
+        saveConfigPartial({ [configFieldKey]: val });
       }
     });
   });
@@ -572,7 +641,7 @@ function setSegmentedValue(containerId, hiddenInputId, badgeId, hintId, val, hin
 async function loadConfig() {
   if (!currentUser) return;
   try {
-    const resp = await fetch('/api/config');
+    const resp = await fetch('/api/config', { cache: 'no-store' });
     if (!resp.ok) {
       if (resp.status === 401) {
         showAuthModal('login');
@@ -927,7 +996,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Botón invertir ruta (Swap estilo Google Maps)
   const btnSwap = document.getElementById('btn-swap-route');
   if (btnSwap) {
-    btnSwap.addEventListener('click', () => {
+    btnSwap.addEventListener('click', async () => {
       const inputOrigin = document.getElementById('input-origin');
       const inputDest = document.getElementById('input-destination');
 
@@ -942,9 +1011,25 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderCoordsPreview('origin');
       renderCoordsPreview('destination');
 
-      showToast('⇅ Ruta invertida: Origen y Destino intercambiados');
+      await saveConfigPartial({
+        origin: inputOrigin.value,
+        destination: inputDest.value,
+        originCoords,
+        destinationCoords
+      }, '⇅ Ruta invertida y guardada en tu cuenta');
     });
   }
+
+  // Autoguardado inmediato en base de datos al editar campos manualmente
+  document.getElementById('input-origin').addEventListener('change', (e) => {
+    saveConfigPartial({ origin: e.target.value }, '💾 Punto de partida guardado');
+  });
+  document.getElementById('input-destination').addEventListener('change', (e) => {
+    saveConfigPartial({ destination: e.target.value }, '💾 Destino guardado');
+  });
+  document.getElementById('input-target-time').addEventListener('change', (e) => {
+    saveConfigPartial({ targetArrivalTime: e.target.value }, '💾 Hora de llegada guardada');
+  });
 
   // Botón reset diario
   document.getElementById('btn-reset-today').addEventListener('click', resetTodayState);
@@ -1000,8 +1085,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Selectores de Barra Horizontal (Segmented Controls estilo CodePen / Material 3)
-  setupSegmentedControl('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', BUFFER_HINTS);
-  setupSegmentedControl('control-window', 'input-window', 'window-val-badge', 'window-hint-text', WINDOW_HINTS);
+  setupSegmentedControl('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', BUFFER_HINTS, 'bufferMinutes');
+  setupSegmentedControl('control-window', 'input-window', 'window-val-badge', 'window-hint-text', WINDOW_HINTS, 'monitoringWindowMinutes');
 
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);

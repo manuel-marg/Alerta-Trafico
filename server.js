@@ -329,7 +329,9 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   const buffer = config.bufferMinutes || 0;
   const windowMinutes = config.monitoringWindowMinutes || 90;
 
-  const cacheKey = `${config.origin}->${config.destination}`;
+  const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : config.origin;
+  const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : config.destination;
+  const cacheKey = `${originParam}->${destParam}`;
   const cachedData = trafficCache.get(cacheKey)?.data;
   const baselineDuration = cachedData?.durationMinutes || 35;
   const tentativeSchedule = getNextTripSchedule(config.targetArrivalTime, buffer, baselineDuration, windowMinutes);
