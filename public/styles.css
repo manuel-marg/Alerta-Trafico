@@ -71,7 +71,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 12px 96px 12px;
+  padding: 0 0 96px 0;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -81,6 +81,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 14px 12px 0 12px;
 }
 
 /* Base Card Style */
@@ -98,17 +99,25 @@ body {
   box-shadow: var(--gmaps-shadow-hover);
 }
 
-/* 1. Header: Google Maps Search Bar Card */
-.gmaps-search-card {
-  background: var(--gmaps-surface);
-  border: 1px solid var(--gmaps-border);
-  border-radius: 24px;
-  padding: 12px 16px;
-  box-shadow: var(--gmaps-shadow);
+/* 1. Top Navbar estilo App Móvil Nativa (Simétrico al Bottom Nav) */
+.top-navbar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--gmaps-border);
+  box-shadow: 0 2px 10px rgba(60, 64, 67, 0.08);
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  position: relative;
+  z-index: 9995;
 }
 
 .gmaps-header-top {
@@ -1332,11 +1341,13 @@ label {
 
 @media (max-width: 500px) {
   body {
-    padding: 10px 8px 96px 8px;
+    padding: 0 0 96px 0;
   }
-  .gmaps-search-card {
-    border-radius: 20px;
-    padding: 10px 14px;
+  .container {
+    padding: 12px 8px 0 8px;
+  }
+  .top-navbar {
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px 14px;
     gap: 8px;
   }
   .gmaps-title {
