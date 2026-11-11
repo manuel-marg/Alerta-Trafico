@@ -78,6 +78,7 @@
 | **Google Cloud API mismatch** | Directions API was not listed standalone in Google Cloud Console. | Google consolidated Directions API into **Routes API** (`computeRoutes`). Backend was updated with native Routes API payload. |
 | **Dominio y Túnel Permanente ($0)** | Túneles temporales `trycloudflare.com` cambiaban de URL en cada reinicio. | Se configuró dominio gratuito `alertatrafico.dpdns.org` en DigitalPlat y Cloudflare con Named Tunnel permanente (`cloudflared tunnel run alerta`). |
 | **Arquitectura Multi-usuario en Teléfono** | La aplicación solo soportaba un único usuario global en `config.json`. | Se implementó base de datos SQLite nativa (`node:sqlite`) con tablas de usuarios, sesiones, rutas aisladas y suscripciones Web Push por usuario. Se migraron automáticamente los datos previos al usuario inicial `admin@alerta.local` (clave `admin123`). |
+| **Diseño y Tema Claro (Light Theme)** | El tema oscuro original no era del agrado visual del usuario. | Se rediseñó completamente la interfaz a un tema claro moderno y limpio (Slate/White/Blue) con tarjetas elevadas, tipografía nítida y caché v3 de Service Worker. |
 
 ---
 
