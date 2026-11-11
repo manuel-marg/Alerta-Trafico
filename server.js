@@ -12,6 +12,29 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DATA_DIR = path.join(__dirname, 'data');
 const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+
+// Clave maestra global de Google Maps API (compartida para todos los usuarios registrados)
+function getSystemGoogleMapsApiKey() {
+  if (process.env.GOOGLE_MAPS_API_KEY && process.env.GOOGLE_MAPS_API_KEY.trim()) {
+    return process.env.GOOGLE_MAPS_API_KEY.trim();
+  }
+  if (fs.existsSync(CONFIG_FILE)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+      if (cfg.googleMapsApiKey && cfg.googleMapsApiKey.trim()) {
+        return cfg.googleMapsApiKey.trim();
+      }
+    } catch (e) {}
+  }
+  try {
+    const row = db.db.prepare("SELECT google_maps_api_key FROM user_config WHERE length(google_maps_api_key) > 10 LIMIT 1").get();
+    if (row && row.google_maps_api_key) {
+      return row.google_maps_api_key.trim();
+    }
+  } catch (e) {}
+  return '';
+}
 
 // --- 1. Inicializar VAPID Keys ---
 function getOrGenerateVapidKeys() {
@@ -92,7 +115,8 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
 
   const now = Date.now();
   const cached = trafficCache.get(cacheKey);
-  if (!forceRefresh && cached && (now - cached.timestamp) < 2 * 60 * 1000) {
+  const hasKey = Boolean(apiKey && apiKey.trim());
+  if (!forceRefresh && cached && (now - cached.timestamp) < 2 * 60 * 1000 && !(cached.data.isSimulation && hasKey)) {
     return { ...cached.data, fromCache: true };
   }
 
@@ -356,12 +380,14 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     }
   }
 
+  const effectiveApiKey = (config.googleMapsApiKey && config.googleMapsApiKey.trim()) || getSystemGoogleMapsApiKey();
+
   let trafficResult = null;
   if (shouldQueryApi) {
     trafficResult = await fetchCommuteTraffic(
       config.origin,
       config.destination,
-      config.googleMapsApiKey,
+      effectiveApiKey,
       config.originCoords,
       config.destinationCoords,
       forceQuery
@@ -370,7 +396,7 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   } else {
     trafficResult = cachedData || {
       success: true,
-      isSimulation: !Boolean(config.googleMapsApiKey),
+      isSimulation: !Boolean(effectiveApiKey),
       origin: config.origin,
       destination: config.destination,
       originCoords: config.originCoords,
@@ -567,13 +593,15 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
 // Leer configuración del usuario
 app.get('/api/config', authRequired, (req, res) => {
   const cfg = db.getUserConfig(req.user.id);
-  const maskedKey = cfg.googleMapsApiKey 
-    ? cfg.googleMapsApiKey.substring(0, 6) + '...' + cfg.googleMapsApiKey.slice(-4)
+  const effectiveKey = (cfg.googleMapsApiKey && cfg.googleMapsApiKey.trim()) || getSystemGoogleMapsApiKey();
+  const maskedKey = effectiveKey
+    ? effectiveKey.substring(0, 6) + '...' + effectiveKey.slice(-4)
     : '';
 
+  const { googleMapsApiKey, ...safeCfg } = cfg;
   res.json({
-    ...cfg,
-    hasApiKey: Boolean(cfg.googleMapsApiKey && cfg.googleMapsApiKey.trim()),
+    ...safeCfg,
+    hasApiKey: Boolean(effectiveKey),
     maskedApiKey: maskedKey
   });
 });
@@ -604,7 +632,9 @@ app.post('/api/config', authRequired, (req, res) => {
   if (googleMapsApiKey !== undefined) updates.googleMapsApiKey = googleMapsApiKey.trim();
 
   const saved = db.saveUserConfig(req.user.id, updates);
-  res.json({ success: true, config: saved });
+  const effectiveKey = (saved.googleMapsApiKey && saved.googleMapsApiKey.trim()) || getSystemGoogleMapsApiKey();
+  const { googleMapsApiKey: _omitKey, ...safeSaved } = saved;
+  res.json({ success: true, config: { ...safeSaved, hasApiKey: Boolean(effectiveKey) } });
 });
 
 // Consultar tráfico actual del usuario al instante
