@@ -1,6 +1,6 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v14';
+const CACHE_NAME = 'alerta-trafico-v15';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,7 +13,12 @@ const STATIC_ASSETS = [
   '/fonts/roboto-latin.woff2',
   '/fonts/roboto-latin-ext.woff2',
   '/fonts/material-symbols-outlined.woff2',
-  '/icons/android-chrome-192x192.png'
+  '/icons/android-chrome-192x192.png',
+  '/icons/android-chrome-512x512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/favicon-32x32.png',
+  '/icons/favicon-16x16.png',
+  '/icons/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {
@@ -35,6 +40,19 @@ self.addEventListener('activate', (event) => {
       });
     })
   );
+});
+
+// Servir fuentes e iconos desde caché del Service Worker para carga instantánea
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin === self.location.origin && (url.pathname.startsWith('/fonts/') || url.pathname.startsWith('/icons/'))) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        return cached || fetch(event.request);
+      })
+    );
+  }
 });
 
 // Manejador del evento PUSH (Llegada de la notificación en segundo plano)

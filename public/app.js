@@ -220,7 +220,8 @@ async function initServiceWorker() {
   }
 
   try {
-    swRegistration = await navigator.serviceWorker.register('/sw.js');
+    swRegistration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+    await swRegistration.update();
     console.log('✅ Service Worker registrado con éxito:', swRegistration.scope);
     await syncPushSubscriptionIfGranted();
   } catch (err) {
