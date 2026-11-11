@@ -495,6 +495,79 @@ function renderCoordsPreview(target) {
   }
 }
 
+// Textos descriptivos dinámicos estilo CodePen / Material 3
+const BUFFER_HINTS = {
+  5: 'Te avisará 5 minutos antes de la salida calculada. Ideal si estás listo y tu vehículo está en la puerta.',
+  10: 'Te avisará 10 minutos antes de la salida calculada. Tiempo justo para tomar llaves, bajar y arrancar.',
+  15: 'Te avisará 15 minutos antes de la salida calculada. Margen cómodo para empacar o buscar estacionamiento.',
+  30: 'Te avisará 30 minutos antes de la salida calculada. Excelente si requieres preparativos adicionales.',
+  60: 'Te avisará 1 hora antes de la salida calculada. Máxima antelación para rutinas largas de mañana.'
+};
+
+const WINDOW_HINTS = {
+  5: 'El sistema revisará el tráfico en tiempo real 5 minutos antes de tu hora de salida estimada.',
+  10: 'El sistema revisará el tráfico en tiempo real 10 minutos antes de tu hora de salida estimada.',
+  15: 'Sondeo activo de Google Maps comenzando 15 minutos antes de la partida estimada.',
+  30: 'Sondeo adaptativo inteligente vigilando el tráfico desde 30 minutos antes de salir.',
+  60: 'Vigilancia continua y adaptativa desde 1 hora antes para detectar atascos tempranos.'
+};
+
+function setupSegmentedControl(containerId, hiddenInputId, badgeId, hintId, hintsMap) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const hiddenInput = document.getElementById(hiddenInputId);
+  const badge = document.getElementById(badgeId);
+  const hintEl = document.getElementById(hintId);
+  const buttons = container.querySelectorAll('.segmented-btn');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const val = Number(btn.getAttribute('data-value'));
+      hiddenInput.value = val;
+      if (badge) {
+        badge.textContent = `${btn.textContent} antes`;
+      }
+      if (hintEl && hintsMap && hintsMap[val]) {
+        hintEl.textContent = hintsMap[val];
+      }
+    });
+  });
+}
+
+function setSegmentedValue(containerId, hiddenInputId, badgeId, hintId, val, hintsMap) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const hiddenInput = document.getElementById(hiddenInputId);
+  const badge = document.getElementById(badgeId);
+  const hintEl = document.getElementById(hintId);
+  const buttons = container.querySelectorAll('.segmented-btn');
+
+  let numericVal = Number(val);
+  const availableVals = Array.from(buttons).map(b => Number(b.getAttribute('data-value')));
+  if (!availableVals.includes(numericVal)) {
+    if (numericVal >= 60) numericVal = 60;
+    else if (numericVal >= 30) numericVal = 30;
+    else if (numericVal >= 15) numericVal = 15;
+    else if (numericVal >= 10) numericVal = 10;
+    else numericVal = 5;
+  }
+
+  hiddenInput.value = numericVal;
+  buttons.forEach(btn => {
+    if (Number(btn.getAttribute('data-value')) === numericVal) {
+      btn.classList.add('active');
+      if (badge) badge.textContent = `${btn.textContent} antes`;
+      if (hintEl && hintsMap && hintsMap[numericVal]) {
+        hintEl.textContent = hintsMap[numericVal];
+      }
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
 // --- 4. Cargar y Guardar Configuración Personal ---
 async function loadConfig() {
   if (!currentUser) return;
@@ -511,8 +584,11 @@ async function loadConfig() {
     document.getElementById('input-origin').value = currentConfig.origin || '';
     document.getElementById('input-destination').value = currentConfig.destination || '';
     document.getElementById('input-target-time').value = currentConfig.targetArrivalTime || '08:00';
-    document.getElementById('input-buffer').value = currentConfig.bufferMinutes !== undefined ? currentConfig.bufferMinutes : 10;
-    document.getElementById('input-window').value = currentConfig.monitoringWindowMinutes || 90;
+
+    const savedBuffer = currentConfig.bufferMinutes !== undefined ? currentConfig.bufferMinutes : 10;
+    const savedWindow = currentConfig.monitoringWindowMinutes || 30;
+    setSegmentedValue('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', savedBuffer, BUFFER_HINTS);
+    setSegmentedValue('control-window', 'input-window', 'window-val-badge', 'window-hint-text', savedWindow, WINDOW_HINTS);
 
     originCoords = currentConfig.originCoords || null;
     destinationCoords = currentConfig.destinationCoords || null;
@@ -872,6 +948,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       closeMapModal();
     }
   });
+
+  // Selectores de Barra Horizontal (Segmented Controls estilo CodePen / Material 3)
+  setupSegmentedControl('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', BUFFER_HINTS);
+  setupSegmentedControl('control-window', 'input-window', 'window-val-badge', 'window-hint-text', WINDOW_HINTS);
 
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);

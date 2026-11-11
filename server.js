@@ -289,7 +289,9 @@ function getNextTripSchedule(targetArrivalTimeStr, bufferMinutes, durationMinute
   const msUntilDeparture = departureDate.getTime() - now.getTime();
   const minutesUntilDeparture = Math.round(msUntilDeparture / (1000 * 60));
 
-  const inWindow = minutesUntilArrival > 0 && minutesUntilArrival <= windowMinutes;
+  // La ventana de monitoreo inteligente vigila desde 'windowMinutes' antes de la salida estimada:
+  const effectiveWindowBeforeArrival = Math.max(windowMinutes, totalTripMinutes + windowMinutes);
+  const inWindow = minutesUntilArrival > 0 && minutesUntilArrival <= effectiveWindowBeforeArrival;
   const mustLeaveNow = inWindow && minutesUntilDeparture <= 0;
 
   return {
