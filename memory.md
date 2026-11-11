@@ -77,6 +77,7 @@
 | **Exposure of private data / keys** | `data/config.json` and `data/vapid.json` contained coordinates and keys. | Untracked `data/*.json` from Git, added them to `.gitignore`, and created `data/config.example.json` as a safe template. |
 | **Google Cloud API mismatch** | Directions API was not listed standalone in Google Cloud Console. | Google consolidated Directions API into **Routes API** (`computeRoutes`). Backend was updated with native Routes API payload. |
 | **Dominio y Túnel Permanente ($0)** | Túneles temporales `trycloudflare.com` cambiaban de URL en cada reinicio. | Se configuró dominio gratuito `alertatrafico.dpdns.org` en DigitalPlat y Cloudflare con Named Tunnel permanente (`cloudflared tunnel run alerta`). |
+| **Arquitectura Multi-usuario en Teléfono** | La aplicación solo soportaba un único usuario global en `config.json`. | Se implementó base de datos SQLite nativa (`node:sqlite`) con tablas de usuarios, sesiones, rutas aisladas y suscripciones Web Push por usuario. Se migraron automáticamente los datos previos al usuario inicial `admin@alerta.local` (clave `admin123`). |
 
 ---
 
