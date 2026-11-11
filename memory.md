@@ -30,7 +30,7 @@
 * **Public Tunneling:**
   * Tool: Cloudflare Quick Tunnel (`cloudflared` binary on Termux).
   * Exposes port `3000` to global HTTPS without port forwarding or public IP requirements.
-  * Active Tunnel URL: `https://neither-elegant-grip-planes.trycloudflare.com`
+  * Active Tunnel URL: `https://alertatrafico.dpdns.org` (Named Tunnel `alerta` vinculado con Cloudflare DNS)
 
 ### Development Node (Local Machine)
 * **OS:** Windows
@@ -76,6 +76,7 @@
 | **Git pull conflict on phone** | `data/config.json` was locally modified on the phone by app runtime. | Always run `git checkout data/config.json && git pull origin main` before restarting the server. |
 | **Exposure of private data / keys** | `data/config.json` and `data/vapid.json` contained coordinates and keys. | Untracked `data/*.json` from Git, added them to `.gitignore`, and created `data/config.example.json` as a safe template. |
 | **Google Cloud API mismatch** | Directions API was not listed standalone in Google Cloud Console. | Google consolidated Directions API into **Routes API** (`computeRoutes`). Backend was updated with native Routes API payload. |
+| **Dominio y Túnel Permanente ($0)** | Túneles temporales `trycloudflare.com` cambiaban de URL en cada reinicio. | Se configuró dominio gratuito `alertatrafico.dpdns.org` en DigitalPlat y Cloudflare con Named Tunnel permanente (`cloudflared tunnel run alerta`). |
 
 ---
 
