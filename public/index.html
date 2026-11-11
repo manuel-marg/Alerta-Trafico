@@ -9,32 +9,41 @@
   <meta name="apple-mobile-web-app-title" content="Alerta Tráfico" />
   <link rel="manifest" href="/manifest.json" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-  <!-- Leaflet.js (Open Source Map - 100% Gratuito y sin costo de API) -->
+  <!-- Google Fonts: Roboto & Google Sans style -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Leaflet.js -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <link rel="stylesheet" href="/styles.css" />
-  <title>Alerta de Tráfico Matutino</title>
+  <title>Alerta de Tráfico - Google Maps Commute</title>
 </head>
 <body>
 
   <div class="container">
-    <!-- Header -->
-    <header>
+    <!-- Google Maps Floating Header Card -->
+    <header class="gmaps-search-card">
       <div class="logo-group">
-        <div class="logo-icon">🚗</div>
+        <div class="gmaps-icon-badge">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </div>
         <div>
-          <h1>Alerta de Tráfico</h1>
-          <p class="subtitle">Despertador dinámico según el tráfico real</p>
+          <h1 class="gmaps-title">Alerta de Tráfico</h1>
+          <p class="gmaps-subtitle">Despertador dinámico en tiempo real</p>
         </div>
       </div>
+
       <div class="badges-group">
         <div id="user-profile-pill" class="user-pill" style="display: none;">
-          <span class="user-avatar">👤</span>
-          <span id="user-display-name">Usuario</span>
-          <button type="button" id="btn-logout" class="btn-logout" title="Cerrar sesión">Salir</button>
+          <div class="user-avatar-circle" id="user-avatar-initial">M</div>
+          <span id="user-display-name">Manuel</span>
+          <button type="button" id="btn-logout" class="btn-logout-gmaps" title="Cerrar sesión">Salir</button>
         </div>
-        <button type="button" id="btn-open-login" class="btn btn-secondary btn-sm" style="display: none;">
-          👤 Iniciar Sesión
+        <button type="button" id="btn-open-login" class="gmaps-pill-btn" style="display: none;">
+          👤 Acceder
         </button>
         <span id="badge-push" class="badge badge-yellow">
           <span class="badge-dot"></span>
@@ -47,148 +56,187 @@
       </div>
     </header>
 
-    <!-- Banner para activar Notificaciones Push si no están activas -->
-    <div id="push-activation-card" class="card push-banner">
+    <!-- Banner Push Estilo Google Maps -->
+    <div id="push-activation-card" class="gmaps-card gmaps-push-banner">
+      <div class="gmaps-push-icon">🔔</div>
       <div class="push-banner-text">
-        <h3>🔔 Activar Notificaciones Push</h3>
-        <p>Permite que la app te avise en el momento exacto en que debas salir.</p>
+        <h3>Activa las alertas matutinas</h3>
+        <p>Google Maps calculará el tráfico antes de que despiertes y te avisará al minuto exacto de salir.</p>
       </div>
-      <button id="btn-enable-push" class="btn btn-primary">
+      <button id="btn-enable-push" class="gmaps-btn-primary">
         Activar
       </button>
     </div>
 
-    <!-- Hero Card: Estado en Vivo y Hora de Salida -->
-    <div class="card card-hero">
-      <div class="hero-header">
-        <span class="hero-title">Estado del Viaje de Hoy</span>
-        <span id="hero-last-check" style="font-size: 0.75rem; color: var(--text-secondary);">Actualizado hace un momento</span>
-      </div>
-
-      <div id="alert-status-box" class="alert-banner alert-normal">
-        <span id="alert-status-icon">🟢</span>
-        <span id="alert-status-text">Calculando tiempo de viaje con tráfico actual...</span>
-      </div>
-
-      <div class="big-time-display">
-        <div class="big-time-label">DEBES SALIR A LAS</div>
-        <div id="big-departure-time" class="big-time-value">--:--</div>
-        <div id="countdown-text" style="font-size: 0.88rem; color: #93c5fd; margin-top: 6px; font-weight: 500;">
-          Calculando cuenta regresiva...
+    <!-- Google Maps Floating Route Box (Selector Origen ➔ Destino) -->
+    <div class="gmaps-card gmaps-route-card">
+      <div class="route-inputs-container">
+        <!-- Indicador visual de puntos (Punto azul -> Línea punteada -> Pin rojo) -->
+        <div class="route-indicators-track">
+          <div class="route-dot-origin" title="Origen"></div>
+          <div class="route-dots-line"></div>
+          <div class="route-pin-destination" title="Destino">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="#D93025">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
         </div>
-      </div>
 
-      <div class="stats-grid">
-        <div class="stat-box">
-          <div class="stat-label">Tráfico Actual</div>
-          <div id="stat-traffic-duration" class="stat-value">-- min</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Margen Extra</div>
-          <div id="stat-buffer" class="stat-value">-- min</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Hora Meta</div>
-          <div id="stat-arrival-target" class="stat-value">--:--</div>
-        </div>
-      </div>
-
-      <div class="route-info">
-        <div class="route-point" title="Origen">
-          <span>🏠</span>
-          <strong id="display-origin">Mi Casa</strong>
-        </div>
-        <div class="route-arrow">➔</div>
-        <div class="route-point" title="Destino">
-          <span>🏢</span>
-          <strong id="display-destination">Mi Trabajo</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- Botones de Acción Rápida -->
-    <div class="action-buttons">
-      <button id="btn-test-notification" class="btn btn-secondary">
-        🔔 Probar Notificación Ahora
-      </button>
-      <button id="btn-refresh-now" class="btn btn-primary">
-        🔄 Actualizar Tráfico Ahora
-      </button>
-    </div>
-
-    <div style="text-align: right;">
-      <button id="btn-reset-today" style="background: none; border: none; color: var(--text-secondary); font-size: 0.78rem; text-decoration: underline; cursor: pointer;">
-        Reiniciar estado diario (para volver a probar la alarma hoy)
-      </button>
-    </div>
-
-    <!-- Formulario de Configuración -->
-    <div class="card">
-      <div class="form-title">
-        ⚙️ Configurar Mi Rutina
-      </div>
-
-      <form id="config-form">
-        <div class="form-group">
-          <label for="input-origin">Dirección o Punto de Partida (Casa):</label>
-          <div class="input-with-button">
-            <input type="text" id="input-origin" placeholder="Ej: Calle 5 con Av. Principal, Los Palos Grandes" required />
-            <button type="button" id="btn-pick-origin" class="btn btn-secondary btn-icon-label" title="Seleccionar en mapa">
+        <!-- Campos de texto -->
+        <div class="route-fields-track">
+          <div class="route-field-row">
+            <input type="text" id="input-origin" placeholder="Tu punto de partida (Casa)" required />
+            <button type="button" id="btn-pick-origin" class="gmaps-mini-btn" title="Fijar en mapa">
               📍 Mapa
             </button>
           </div>
           <div id="origin-coords-preview" class="coords-pill" style="display: none;"></div>
-          <div class="input-hint">Puedes escribirla o hacer clic en <strong>📍 Mapa</strong> para colocar un pin exacto sin costo.</div>
-        </div>
 
-        <div class="form-group">
-          <label for="input-destination">Dirección del Trabajo (Destino):</label>
-          <div class="input-with-button">
-            <input type="text" id="input-destination" placeholder="Ej: Torre Financiera, Chacao" required />
-            <button type="button" id="btn-pick-destination" class="btn btn-secondary btn-icon-label" title="Seleccionar en mapa">
+          <div class="route-field-separator"></div>
+
+          <div class="route-field-row">
+            <input type="text" id="input-destination" placeholder="Elegir destino (Trabajo / Oficina)" required />
+            <button type="button" id="btn-pick-destination" class="gmaps-mini-btn" title="Fijar en mapa">
               📍 Mapa
             </button>
           </div>
           <div id="dest-coords-preview" class="coords-pill" style="display: none;"></div>
-          <div class="input-hint">Elige la ubicación exacta de tu oficina con el pin en el mapa.</div>
         </div>
 
-        <div class="form-row">
+        <!-- Botón Invertir Ruta (Swap) -->
+        <div class="route-swap-track">
+          <button type="button" id="btn-swap-route" class="gmaps-icon-circle-btn" title="Invertir origen y destino">
+            ⇅
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Google Maps Bottom Sheet Card: Resumen de Viaje y Estado en Vivo -->
+    <div class="gmaps-card gmaps-trip-sheet">
+      <div class="gmaps-sheet-handle"></div>
+
+      <!-- Barra de Modo de Transporte (Auto, Tráfico en tiempo real) -->
+      <div class="gmaps-transport-bar">
+        <div class="transport-tab active">
+          <span class="transport-icon">🚗</span>
+          <span class="transport-label">En auto</span>
+          <span id="stat-traffic-duration" class="transport-time">-- min</span>
+        </div>
+        <div class="traffic-tag-pill" id="traffic-pill-tag">
+          🟢 Tráfico en vivo
+        </div>
+      </div>
+
+      <!-- Banner de Estado de la Alerta -->
+      <div id="alert-status-box" class="gmaps-alert-banner alert-normal">
+        <span id="alert-status-icon">🟢</span>
+        <span id="alert-status-text">Calculando tiempo de viaje con tráfico actual...</span>
+      </div>
+
+      <!-- Gran visualizador de Hora de Salida -->
+      <div class="gmaps-time-display">
+        <div class="gmaps-time-eyebrow">HORA SUGERIDA PARA SALIR</div>
+        <div id="big-departure-time" class="gmaps-big-time">--:--</div>
+        <div id="countdown-text" class="gmaps-countdown">
+          Calculando cuenta regresiva...
+        </div>
+      </div>
+
+      <!-- Estadísticas de Google Maps -->
+      <div class="gmaps-stats-chips">
+        <div class="gmaps-stat-chip">
+          <span class="chip-label">Llegada meta</span>
+          <strong id="stat-arrival-target" class="chip-value">--:--</strong>
+        </div>
+        <div class="gmaps-stat-chip">
+          <span class="chip-label">Margen extra</span>
+          <strong id="stat-buffer" class="chip-value">-- min</strong>
+        </div>
+        <div class="gmaps-stat-chip">
+          <span class="chip-label">Distancia</span>
+          <strong id="stat-distance" class="chip-value">-- km</strong>
+        </div>
+      </div>
+
+      <!-- Puntos de Ruta -->
+      <div class="gmaps-route-preview">
+        <div class="route-preview-point">
+          <span class="preview-dot blue-dot"></span>
+          <span id="display-origin" class="preview-text">Mi Casa</span>
+        </div>
+        <div class="preview-connector">➔</div>
+        <div class="route-preview-point">
+          <span class="preview-dot red-dot"></span>
+          <span id="display-destination" class="preview-text">Mi Trabajo</span>
+        </div>
+      </div>
+
+      <!-- Botones de Acción Estilo Google Maps -->
+      <div class="gmaps-actions-row">
+        <button id="btn-refresh-now" class="gmaps-btn-teal">
+          <span class="btn-icon">▲</span> Actualizar Tráfico
+        </button>
+        <button id="btn-test-notification" class="gmaps-btn-tonal">
+          <span class="btn-icon">🔔</span> Probar Alarma
+        </button>
+      </div>
+
+      <div class="gmaps-sheet-footer">
+        <span id="hero-last-check">Actualizado hace un momento</span>
+        <button id="btn-reset-today" class="gmaps-link-btn">
+          Reiniciar alerta diaria
+        </button>
+      </div>
+    </div>
+
+    <!-- Ajustes de Horario y Rutina -->
+    <div class="gmaps-card gmaps-settings-card">
+      <div class="gmaps-card-title">
+        <span>⏰</span> Ajustes del Horario Matutino
+      </div>
+
+      <form id="config-form">
+        <div class="gmaps-form-grid">
           <div class="form-group">
-            <label for="input-target-time">Hora de llegada al trabajo:</label>
-            <input type="time" id="input-target-time" required />
-            <div class="input-hint">Hora exacta a la que debes estar en la oficina.</div>
+            <label for="input-target-time">Hora de llegada objetivo:</label>
+            <input type="time" id="input-target-time" class="gmaps-input" required />
+            <div class="input-hint">Hora límite a la que debes entrar al trabajo.</div>
           </div>
 
           <div class="form-group">
             <label for="input-buffer">Margen previo (minutos):</label>
-            <input type="number" id="input-buffer" min="0" max="60" value="10" />
-            <div class="input-hint">Tiempo para bajar al coche, estacionar y subir.</div>
+            <input type="number" id="input-buffer" class="gmaps-input" min="0" max="60" value="10" />
+            <div class="input-hint">Tiempo para bajar al coche y estacionar.</div>
           </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" style="margin-top: 10px;">
           <label for="input-window">Ventana de monitoreo previo (minutos):</label>
-          <input type="number" id="input-window" min="30" max="240" value="90" />
-          <div class="input-hint">El sistema empezará a vigilar el tráfico desde esta cantidad de minutos antes.</div>
+          <input type="number" id="input-window" class="gmaps-input" min="30" max="240" value="90" />
+          <div class="input-hint">El sistema vigilará el tráfico con sondeo inteligente desde este tiempo antes.</div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-full" style="margin-top: 10px;">
-          💾 Guardar Configuración
+        <button type="submit" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 14px;">
+          💾 Guardar Configuración de Rutina
         </button>
       </form>
     </div>
   </div>
 
-  <!-- Modal de Autenticación (Login / Registro) -->
+  <!-- Modal de Autenticación (Google Material 3) -->
   <div id="auth-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card auth-modal-card">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <span style="font-size: 1.6rem;">🚗</span>
+          <div class="gmaps-icon-badge" style="width: 38px; height: 38px;">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
           <div>
-            <h3 id="auth-modal-title">Acceso a Alerta-Tráfico</h3>
-            <p class="subtitle" style="font-size: 0.78rem;">Tu despertador dinámico personalizado</p>
+            <h3 id="auth-modal-title" class="gmaps-modal-title">Cuenta Alerta-Tráfico</h3>
+            <p class="subtitle" style="font-size: 0.78rem;">Sincronizado con Google Maps Routes</p>
           </div>
         </div>
         <button type="button" id="btn-close-auth-modal" class="modal-close-btn" title="Cerrar">&times;</button>
@@ -205,14 +253,14 @@
       <form id="form-login" class="auth-form">
         <div class="form-group">
           <label for="login-email">Correo Electrónico:</label>
-          <input type="email" id="login-email" placeholder="ejemplo@correo.com" required autocomplete="email" />
+          <input type="email" id="login-email" class="gmaps-input" placeholder="ejemplo@correo.com" required autocomplete="email" />
         </div>
         <div class="form-group">
           <label for="login-password">Contraseña:</label>
-          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+          <input type="password" id="login-password" class="gmaps-input" placeholder="••••••••" required autocomplete="current-password" />
         </div>
-        <button type="submit" id="btn-submit-login" class="btn btn-primary btn-full" style="margin-top: 10px;">
-          🚀 Entrar a mi cuenta
+        <button type="submit" id="btn-submit-login" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 8px;">
+          Entrar a mi cuenta
         </button>
         <div class="auth-switch-text">
           ¿No tienes cuenta todavía? <a href="#" id="link-to-register">Regístrate gratis</a>
@@ -223,18 +271,18 @@
       <form id="form-register" class="auth-form" style="display: none;">
         <div class="form-group">
           <label for="reg-name">Tu Nombre:</label>
-          <input type="text" id="reg-name" placeholder="Ej: Manuel Rodríguez" required autocomplete="name" />
+          <input type="text" id="reg-name" class="gmaps-input" placeholder="Ej: Manuel Rodríguez" required autocomplete="name" />
         </div>
         <div class="form-group">
           <label for="reg-email">Correo Electrónico:</label>
-          <input type="email" id="reg-email" placeholder="ejemplo@correo.com" required autocomplete="email" />
+          <input type="email" id="reg-email" class="gmaps-input" placeholder="ejemplo@correo.com" required autocomplete="email" />
         </div>
         <div class="form-group">
           <label for="reg-password">Contraseña:</label>
-          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
+          <input type="password" id="reg-password" class="gmaps-input" placeholder="Mínimo 6 caracteres" required minlength="6" autocomplete="new-password" />
         </div>
-        <button type="submit" id="btn-submit-register" class="btn btn-primary btn-full" style="margin-top: 10px;">
-          ✨ Crear mi cuenta gratis
+        <button type="submit" id="btn-submit-register" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 8px;">
+          Crear mi cuenta gratis
         </button>
         <div class="auth-switch-text">
           ¿Ya tienes cuenta? <a href="#" id="link-to-login">Inicia sesión</a>
@@ -243,24 +291,24 @@
     </div>
   </div>
 
-  <!-- Modal de Selector de Mapa (OpenStreetMap + Leaflet) -->
+  <!-- Modal de Selector de Mapa (OpenStreetMap + Leaflet con estética Google Maps) -->
   <div id="map-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
         <div>
-          <h3 id="modal-map-title">📍 Seleccionar Ubicación</h3>
-          <p class="subtitle" style="font-size: 0.76rem;">Haz clic en el mapa o arrastra el pin a tu ubicación exacta</p>
+          <h3 id="modal-map-title" class="gmaps-modal-title">📍 Seleccionar Ubicación</h3>
+          <p class="subtitle" style="font-size: 0.76rem;">Arrastra el pin o toca en el mapa para ubicar el punto</p>
         </div>
         <button type="button" id="btn-close-modal" class="modal-close-btn" title="Cerrar">&times;</button>
       </div>
 
-      <!-- Buscador con OpenStreetMap Nominatim -->
+      <!-- Buscador flotante estilo Google Maps -->
       <div class="map-search-bar">
-        <input type="text" id="map-search-input" placeholder="Buscar calle, avenida, negocio o punto..." />
-        <button type="button" id="btn-map-search" class="btn btn-primary" style="padding: 10px 14px; font-size: 0.85rem;">
-          🔍 Buscar
+        <input type="text" id="map-search-input" class="gmaps-input" placeholder="Buscar calle, avenida, negocio o punto..." />
+        <button type="button" id="btn-map-search" class="gmaps-btn-primary" style="padding: 8px 16px; font-size: 0.85rem;">
+          Buscar
         </button>
-        <button type="button" id="btn-map-gps" class="btn btn-secondary" title="Usar mi ubicación GPS actual" style="padding: 10px 12px;">
+        <button type="button" id="btn-map-gps" class="gmaps-btn-tonal" title="Usar mi ubicación GPS actual" style="padding: 8px 12px;">
           🎯 GPS
         </button>
       </div>
@@ -271,20 +319,20 @@
 
       <!-- Info del pin actual -->
       <div class="pin-info-box">
-        <div style="font-weight: 600; font-size: 0.85rem; color: #93c5fd;" id="pin-address-text">
-          Haz clic en cualquier punto del mapa para colocar el pin...
+        <div style="font-weight: 600; font-size: 0.88rem; color: #1a73e8;" id="pin-address-text">
+          Toca el mapa para fijar el pin...
         </div>
-        <div style="font-size: 0.74rem; color: var(--text-secondary); margin-top: 2px;" id="pin-coords-text">
+        <div style="font-size: 0.74rem; color: #5f6368; margin-top: 2px;" id="pin-coords-text">
           Coordenadas: --
         </div>
       </div>
 
       <!-- Acciones del Modal -->
       <div class="modal-actions">
-        <button type="button" id="btn-cancel-pin" class="btn btn-secondary">
+        <button type="button" id="btn-cancel-pin" class="gmaps-btn-tonal">
           Cancelar
         </button>
-        <button type="button" id="btn-confirm-pin" class="btn btn-primary">
+        <button type="button" id="btn-confirm-pin" class="gmaps-btn-teal">
           ✅ Confirmar Ubicación
         </button>
       </div>

@@ -54,6 +54,10 @@ async function checkAuthStatus() {
     if (data.loggedIn && data.user) {
       currentUser = data.user;
       nameSpan.textContent = currentUser.name || currentUser.email;
+      const initialEl = document.getElementById('user-avatar-initial');
+      if (initialEl) {
+        initialEl.textContent = (currentUser.name || currentUser.email).charAt(0).toUpperCase();
+      }
       pill.style.display = 'inline-flex';
       btnOpenLogin.style.display = 'none';
       closeAuthModal();
@@ -571,12 +575,31 @@ function renderDashboard(check) {
     statTraffic.textContent = trafficResult.durationText || `${trafficResult.durationMinutes} min`;
     document.getElementById('display-origin').textContent = trafficResult.origin || currentConfig?.origin;
     document.getElementById('display-destination').textContent = trafficResult.destination || currentConfig?.destination;
+
+    const statDistance = document.getElementById('stat-distance');
+    if (statDistance && trafficResult.distanceText) {
+      statDistance.textContent = trafficResult.distanceText;
+    }
+
+    const trafficPill = document.getElementById('traffic-pill-tag');
+    if (trafficPill) {
+      if (trafficResult.isSimulation) {
+        trafficPill.textContent = '🟡 Modo Simulación';
+        trafficPill.style.background = '#fef7e0';
+        trafficPill.style.color = '#e37400';
+      } else {
+        trafficPill.textContent = '🟢 Tráfico en vivo';
+        trafficPill.style.background = '#e6f4ea';
+        trafficPill.style.color = '#137333';
+      }
+    }
   }
 
   if (!schedule) {
-    alertBox.className = 'alert-banner alert-normal';
+    alertBox.className = 'gmaps-alert-banner alert-normal';
     alertIcon.textContent = 'ℹ️';
     alertText.textContent = statusMessage || 'Esperando inicio del monitoreo';
+    bigTime.style.color = 'var(--gmaps-blue)';
     return;
   }
 
@@ -590,37 +613,41 @@ function renderDashboard(check) {
   };
 
   if (schedule.mustLeaveNow) {
-    alertBox.className = 'alert-banner alert-urgent';
+    alertBox.className = 'gmaps-alert-banner alert-urgent';
     alertIcon.textContent = '🚨';
     alertText.textContent = `¡DEBES SALIR YA! Tráfico pesado detectado.`;
+    bigTime.style.color = 'var(--gmaps-red)';
     countdownText.textContent = `¡Sal de inmediato para llegar a tiempo!`;
-    countdownText.style.color = '#fca5a5';
+    countdownText.style.color = 'var(--gmaps-red)';
     return;
   }
 
   if (schedule.isForTomorrow) {
-    alertBox.className = 'alert-banner alert-completed';
+    alertBox.className = 'gmaps-alert-banner alert-completed';
     alertIcon.textContent = '🌙';
     alertText.textContent = statusMessage;
+    bigTime.style.color = 'var(--gmaps-blue)';
     countdownText.textContent = `Próximo monitoreo mañana temprano.`;
-    countdownText.style.color = '#cbd5e1';
+    countdownText.style.color = 'var(--gmaps-text-secondary)';
     return;
   }
 
   if (schedule.inWindow) {
-    alertBox.className = 'alert-banner alert-normal';
+    alertBox.className = 'gmaps-alert-banner alert-normal';
     alertIcon.textContent = '🟢';
     alertText.textContent = `Monitoreo matutino activo. Tráfico actual: ${trafficResult.durationText}.`;
+    bigTime.style.color = 'var(--gmaps-green)';
     countdownText.textContent = `Te quedan aproximadamente ${formatMinutes(schedule.minutesUntilDeparture)} para salir.`;
-    countdownText.style.color = '#6ee7b7';
+    countdownText.style.color = 'var(--gmaps-green-dark)';
     return;
   }
 
-  alertBox.className = 'alert-banner alert-waiting';
+  alertBox.className = 'gmaps-alert-banner alert-waiting';
   alertIcon.textContent = '⏳';
   alertText.textContent = `En espera. Tu salida de hoy está prevista para las ${schedule.departureTimeFormatted}.`;
+  bigTime.style.color = 'var(--gmaps-orange)';
   countdownText.textContent = `Faltan ${formatMinutes(schedule.minutesUntilDeparture)} para la salida.`;
-  countdownText.style.color = '#fde68a';
+  countdownText.style.color = 'var(--gmaps-orange)';
 }
 
 async function triggerTestNotification() {
@@ -740,6 +767,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Botón refrescar ahora (fuerza consulta en vivo)
   document.getElementById('btn-refresh-now').addEventListener('click', () => checkTrafficNow(true));
+
+  // Botón invertir ruta (Swap estilo Google Maps)
+  const btnSwap = document.getElementById('btn-swap-route');
+  if (btnSwap) {
+    btnSwap.addEventListener('click', () => {
+      const inputOrigin = document.getElementById('input-origin');
+      const inputDest = document.getElementById('input-destination');
+
+      const tempVal = inputOrigin.value;
+      inputOrigin.value = inputDest.value;
+      inputDest.value = tempVal;
+
+      const tempCoords = originCoords;
+      originCoords = destinationCoords;
+      destinationCoords = tempCoords;
+
+      renderCoordsPreview('origin');
+      renderCoordsPreview('destination');
+
+      showToast('⇅ Ruta invertida: Origen y Destino intercambiados');
+    });
+  }
 
   // Botón reset diario
   document.getElementById('btn-reset-today').addEventListener('click', resetTodayState);
