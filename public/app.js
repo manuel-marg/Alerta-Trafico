@@ -823,8 +823,58 @@ async function resetTodayState() {
   }
 }
 
+// --- 6. Menú Móvil Inferior (Bottom Navigation Bar) ---
+function initBottomNav() {
+  const tabHome = document.getElementById('tab-nav-home');
+  const tabSettings = document.getElementById('tab-nav-settings');
+  const viewHome = document.getElementById('view-home');
+  const viewSettings = document.getElementById('view-settings');
+  const btnQuickRefresh = document.getElementById('btn-quick-refresh');
+
+  function switchView(target) {
+    if (target === 'home') {
+      viewHome.style.display = 'flex';
+      viewSettings.style.display = 'none';
+      tabHome.classList.add('active');
+      tabHome.setAttribute('aria-current', 'page');
+      tabSettings.classList.remove('active');
+      tabSettings.removeAttribute('aria-current');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      viewHome.style.display = 'none';
+      viewSettings.style.display = 'flex';
+      tabSettings.classList.add('active');
+      tabSettings.setAttribute('aria-current', 'page');
+      tabHome.classList.remove('active');
+      tabHome.removeAttribute('aria-current');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  if (tabHome && tabSettings) {
+    tabHome.addEventListener('click', () => switchView('home'));
+    tabSettings.addEventListener('click', () => switchView('settings'));
+  }
+
+  if (btnQuickRefresh) {
+    btnQuickRefresh.addEventListener('click', async () => {
+      switchView('home');
+      btnQuickRefresh.classList.add('spinning');
+      showToast('🔄 Calculando tiempo y tráfico actual...');
+      try {
+        await checkTrafficNow(true);
+      } finally {
+        setTimeout(() => {
+          btnQuickRefresh.classList.remove('spinning');
+        }, 600);
+      }
+    });
+  }
+}
+
 // --- 5. Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
+  initBottomNav();
   await initServiceWorker();
   await checkAuthStatus();
 

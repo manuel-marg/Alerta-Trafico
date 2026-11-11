@@ -77,208 +77,213 @@
       </div>
     </header>
 
-    <!-- Banner Push Estilo Google Maps -->
-    <div id="push-activation-card" class="gmaps-card gmaps-push-banner">
-      <div class="gmaps-push-icon">
-        <span class="material-symbols-outlined" style="font-size: 32px; color: var(--gmaps-blue);">notifications_active</span>
+    <!-- Vista 1: Inicio (Ruta y Resumen de Viaje) -->
+    <main id="view-home" class="app-view">
+      <!-- Banner Push Estilo Google Maps -->
+      <div id="push-activation-card" class="gmaps-card gmaps-push-banner">
+        <div class="gmaps-push-icon">
+          <span class="material-symbols-outlined" style="font-size: 32px; color: var(--gmaps-blue);">notifications_active</span>
+        </div>
+        <div class="push-banner-text">
+          <h3>Activa las alertas matutinas</h3>
+          <p>Google Maps calculará el tráfico antes de que despiertes y te avisará al minuto exacto de salir.</p>
+        </div>
+        <button id="btn-enable-push" class="gmaps-btn-primary">
+          Activar
+        </button>
       </div>
-      <div class="push-banner-text">
-        <h3>Activa las alertas matutinas</h3>
-        <p>Google Maps calculará el tráfico antes de que despiertes y te avisará al minuto exacto de salir.</p>
-      </div>
-      <button id="btn-enable-push" class="gmaps-btn-primary">
-        Activar
-      </button>
-    </div>
 
-    <!-- Google Maps Floating Route Box (Selector Origen ➔ Destino) -->
-    <div class="gmaps-card gmaps-route-card">
-      <div class="route-inputs-container">
-        <!-- Indicador visual de puntos (Punto azul -> Línea punteada -> Pin rojo) -->
-        <div class="route-indicators-track">
-          <div class="route-dot-origin" title="Origen"></div>
-          <div class="route-dots-line"></div>
-          <div class="route-pin-destination" title="Destino">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="#D93025">
-              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-            </svg>
+      <!-- Google Maps Floating Route Box (Selector Origen ➔ Destino) -->
+      <div class="gmaps-card gmaps-route-card">
+        <div class="route-inputs-container">
+          <!-- Indicador visual de puntos (Punto azul -> Línea punteada -> Pin rojo) -->
+          <div class="route-indicators-track">
+            <div class="route-dot-origin" title="Origen"></div>
+            <div class="route-dots-line"></div>
+            <div class="route-pin-destination" title="Destino">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="#D93025">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Campos de texto -->
+          <div class="route-fields-track">
+            <div class="route-field-row">
+              <input type="text" id="input-origin" placeholder="Tu punto de partida (Casa)" required />
+              <button type="button" id="btn-pick-origin" class="gmaps-mini-btn" title="Fijar en mapa">
+                <span class="material-symbols-outlined" style="font-size: 16px;">pin_drop</span> Mapa
+              </button>
+            </div>
+            <div id="origin-coords-preview" class="coords-pill" style="display: none;"></div>
+
+            <div class="route-field-separator"></div>
+
+            <div class="route-field-row">
+              <input type="text" id="input-destination" placeholder="Elegir destino (Trabajo / Oficina)" required />
+              <button type="button" id="btn-pick-destination" class="gmaps-mini-btn" title="Fijar en mapa">
+                <span class="material-symbols-outlined" style="font-size: 16px;">pin_drop</span> Mapa
+              </button>
+            </div>
+            <div id="dest-coords-preview" class="coords-pill" style="display: none;"></div>
+          </div>
+
+          <!-- Botón Invertir Ruta (Swap) -->
+          <div class="route-swap-track">
+            <button type="button" id="btn-swap-route" class="gmaps-icon-circle-btn" title="Invertir origen y destino">
+              <span class="material-symbols-outlined" style="font-size: 20px;">swap_vert</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Google Maps Bottom Sheet Card: Resumen de Viaje y Estado en Vivo -->
+      <div class="gmaps-card gmaps-trip-sheet">
+        <div class="gmaps-sheet-handle"></div>
+
+        <!-- Barra de Modo de Transporte (Auto, Tráfico en tiempo real) -->
+        <div class="gmaps-transport-bar">
+          <div class="transport-tab active">
+            <span class="transport-icon">
+              <span class="material-symbols-outlined" style="font-size: 22px;">directions_car</span>
+            </span>
+            <span class="transport-label">En auto</span>
+            <span id="stat-traffic-duration" class="transport-time">-- min</span>
+          </div>
+          <div class="traffic-tag-pill" id="traffic-pill-tag">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-green);">sensors</span> Tráfico en vivo
           </div>
         </div>
 
-        <!-- Campos de texto -->
-        <div class="route-fields-track">
-          <div class="route-field-row">
-            <input type="text" id="input-origin" placeholder="Tu punto de partida (Casa)" required />
-            <button type="button" id="btn-pick-origin" class="gmaps-mini-btn" title="Fijar en mapa">
-              <span class="material-symbols-outlined" style="font-size: 16px;">pin_drop</span> Mapa
-            </button>
-          </div>
-          <div id="origin-coords-preview" class="coords-pill" style="display: none;"></div>
-
-          <div class="route-field-separator"></div>
-
-          <div class="route-field-row">
-            <input type="text" id="input-destination" placeholder="Elegir destino (Trabajo / Oficina)" required />
-            <button type="button" id="btn-pick-destination" class="gmaps-mini-btn" title="Fijar en mapa">
-              <span class="material-symbols-outlined" style="font-size: 16px;">pin_drop</span> Mapa
-            </button>
-          </div>
-          <div id="dest-coords-preview" class="coords-pill" style="display: none;"></div>
+        <!-- Banner de Estado de la Alerta -->
+        <div id="alert-status-box" class="gmaps-alert-banner alert-normal">
+          <span id="alert-status-icon">
+            <span class="material-symbols-outlined" style="font-size: 18px;">info</span>
+          </span>
+          <span id="alert-status-text">Calculando tiempo de viaje con tráfico actual...</span>
         </div>
 
-        <!-- Botón Invertir Ruta (Swap) -->
-        <div class="route-swap-track">
-          <button type="button" id="btn-swap-route" class="gmaps-icon-circle-btn" title="Invertir origen y destino">
-            <span class="material-symbols-outlined" style="font-size: 20px;">swap_vert</span>
+        <!-- Gran visualizador de Hora de Salida -->
+        <div class="gmaps-time-display">
+          <div class="gmaps-time-eyebrow">HORA SUGERIDA PARA SALIR</div>
+          <div id="big-departure-time" class="gmaps-big-time">--:--</div>
+          <div id="countdown-text" class="gmaps-countdown">
+            Calculando cuenta regresiva...
+          </div>
+        </div>
+
+        <!-- Estadísticas de Google Maps -->
+        <div class="gmaps-stats-chips">
+          <div class="gmaps-stat-chip">
+            <span class="chip-label">Llegada meta</span>
+            <strong id="stat-arrival-target" class="chip-value">--:--</strong>
+          </div>
+          <div class="gmaps-stat-chip">
+            <span class="chip-label">Margen extra</span>
+            <strong id="stat-buffer" class="chip-value">-- min</strong>
+          </div>
+          <div class="gmaps-stat-chip">
+            <span class="chip-label">Distancia</span>
+            <strong id="stat-distance" class="chip-value">-- km</strong>
+          </div>
+        </div>
+
+        <!-- Puntos de Ruta -->
+        <div class="gmaps-route-preview">
+          <div class="route-preview-point">
+            <span class="preview-dot blue-dot"></span>
+            <span id="display-origin" class="preview-text">Mi Casa</span>
+          </div>
+          <div class="preview-connector">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-text-muted);">arrow_forward</span>
+          </div>
+          <div class="route-preview-point">
+            <span class="preview-dot red-dot"></span>
+            <span id="display-destination" class="preview-text">Mi Trabajo</span>
+          </div>
+        </div>
+
+        <!-- Botones de Acción Estilo Google Maps -->
+        <div class="gmaps-actions-row">
+          <button id="btn-refresh-now" class="gmaps-btn-teal">
+            <span class="material-symbols-outlined" style="font-size: 18px;">navigation</span> Actualizar Tráfico
+          </button>
+          <button id="btn-test-notification" class="gmaps-btn-tonal">
+            <span class="material-symbols-outlined" style="font-size: 18px;">notifications_active</span> Probar Alarma
+          </button>
+        </div>
+
+        <div class="gmaps-sheet-footer">
+          <span id="hero-last-check">Actualizado hace un momento</span>
+          <button id="btn-reset-today" class="gmaps-link-btn">
+            Reiniciar alerta diaria
           </button>
         </div>
       </div>
-    </div>
+    </main>
 
-    <!-- Google Maps Bottom Sheet Card: Resumen de Viaje y Estado en Vivo -->
-    <div class="gmaps-card gmaps-trip-sheet">
-      <div class="gmaps-sheet-handle"></div>
-
-      <!-- Barra de Modo de Transporte (Auto, Tráfico en tiempo real) -->
-      <div class="gmaps-transport-bar">
-        <div class="transport-tab active">
-          <span class="transport-icon">
-            <span class="material-symbols-outlined" style="font-size: 22px;">directions_car</span>
-          </span>
-          <span class="transport-label">En auto</span>
-          <span id="stat-traffic-duration" class="transport-time">-- min</span>
-        </div>
-        <div class="traffic-tag-pill" id="traffic-pill-tag">
-          <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-green);">sensors</span> Tráfico en vivo
-        </div>
-      </div>
-
-      <!-- Banner de Estado de la Alerta -->
-      <div id="alert-status-box" class="gmaps-alert-banner alert-normal">
-        <span id="alert-status-icon">
-          <span class="material-symbols-outlined" style="font-size: 18px;">info</span>
-        </span>
-        <span id="alert-status-text">Calculando tiempo de viaje con tráfico actual...</span>
-      </div>
-
-      <!-- Gran visualizador de Hora de Salida -->
-      <div class="gmaps-time-display">
-        <div class="gmaps-time-eyebrow">HORA SUGERIDA PARA SALIR</div>
-        <div id="big-departure-time" class="gmaps-big-time">--:--</div>
-        <div id="countdown-text" class="gmaps-countdown">
-          Calculando cuenta regresiva...
-        </div>
-      </div>
-
-      <!-- Estadísticas de Google Maps -->
-      <div class="gmaps-stats-chips">
-        <div class="gmaps-stat-chip">
-          <span class="chip-label">Llegada meta</span>
-          <strong id="stat-arrival-target" class="chip-value">--:--</strong>
-        </div>
-        <div class="gmaps-stat-chip">
-          <span class="chip-label">Margen extra</span>
-          <strong id="stat-buffer" class="chip-value">-- min</strong>
-        </div>
-        <div class="gmaps-stat-chip">
-          <span class="chip-label">Distancia</span>
-          <strong id="stat-distance" class="chip-value">-- km</strong>
-        </div>
-      </div>
-
-      <!-- Puntos de Ruta -->
-      <div class="gmaps-route-preview">
-        <div class="route-preview-point">
-          <span class="preview-dot blue-dot"></span>
-          <span id="display-origin" class="preview-text">Mi Casa</span>
-        </div>
-        <div class="preview-connector">
-          <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-text-muted);">arrow_forward</span>
-        </div>
-        <div class="route-preview-point">
-          <span class="preview-dot red-dot"></span>
-          <span id="display-destination" class="preview-text">Mi Trabajo</span>
-        </div>
-      </div>
-
-      <!-- Botones de Acción Estilo Google Maps -->
-      <div class="gmaps-actions-row">
-        <button id="btn-refresh-now" class="gmaps-btn-teal">
-          <span class="material-symbols-outlined" style="font-size: 18px;">navigation</span> Actualizar Tráfico
-        </button>
-        <button id="btn-test-notification" class="gmaps-btn-tonal">
-          <span class="material-symbols-outlined" style="font-size: 18px;">notifications_active</span> Probar Alarma
-        </button>
-      </div>
-
-      <div class="gmaps-sheet-footer">
-        <span id="hero-last-check">Actualizado hace un momento</span>
-        <button id="btn-reset-today" class="gmaps-link-btn">
-          Reiniciar alerta diaria
-        </button>
-      </div>
-    </div>
-
-    <!-- Ajustes de Horario y Rutina -->
-    <div class="gmaps-card gmaps-settings-card">
-      <div class="gmaps-card-title">
-        <span class="material-symbols-outlined" style="font-size: 22px; color: var(--gmaps-blue);">alarm</span> Ajustes del Horario Matutino
-      </div>
-
-      <form id="config-form">
-        <div class="form-group">
-          <label for="input-target-time">Hora de llegada objetivo:</label>
-          <input type="time" id="input-target-time" class="gmaps-input" required />
-          <div class="input-hint">Hora límite a la que debes entrar al trabajo u oficina.</div>
+    <!-- Vista 2: Ajustes (Horario y Rutina) -->
+    <main id="view-settings" class="app-view" style="display: none;">
+      <div class="gmaps-card gmaps-settings-card">
+        <div class="gmaps-card-title">
+          <span class="material-symbols-outlined" style="font-size: 22px; color: var(--gmaps-blue);">alarm</span> Ajustes del Horario Matutino
         </div>
 
-        <!-- Selector Horizontal de Margen Previo (Pill Bar) -->
-        <div class="segmented-group" style="margin-top: 14px;">
-          <div class="segmented-header">
-            <label class="segmented-title">
-              <span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">notifications_active</span> Margen de anticipación (Alarma):
-            </label>
-            <span id="buffer-val-badge" class="segmented-badge">10 min antes</span>
+        <form id="config-form">
+          <div class="form-group">
+            <label for="input-target-time">Hora de llegada objetivo:</label>
+            <input type="time" id="input-target-time" class="gmaps-input" required />
+            <div class="input-hint">Hora límite a la que debes entrar al trabajo u oficina.</div>
           </div>
-          <div class="segmented-control" id="control-buffer">
-            <input type="hidden" id="input-buffer" value="10" />
-            <button type="button" class="segmented-btn" data-value="5">5 min</button>
-            <button type="button" class="segmented-btn active" data-value="10">10 min</button>
-            <button type="button" class="segmented-btn" data-value="15">15 min</button>
-            <button type="button" class="segmented-btn" data-value="30">30 min</button>
-            <button type="button" class="segmented-btn" data-value="60">1 hora</button>
-          </div>
-          <div class="segmented-hint" id="buffer-hint-text">
-            Te avisará 10 minutos antes de la hora calculada de salida para bajar con calma.
-          </div>
-        </div>
 
-        <!-- Selector Horizontal de Ventana de Monitoreo (Pill Bar) -->
-        <div class="segmented-group" style="margin-top: 16px;">
-          <div class="segmented-header">
-            <label class="segmented-title">
-              <span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">history_toggle_off</span> Ventana de monitoreo inteligente:
-            </label>
-            <span id="window-val-badge" class="segmented-badge">30 min antes</span>
+          <!-- Selector Horizontal de Margen Previo (Pill Bar) -->
+          <div class="segmented-group" style="margin-top: 14px;">
+            <div class="segmented-header">
+              <label class="segmented-title">
+                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">notifications_active</span> Margen de anticipación (Alarma):
+              </label>
+              <span id="buffer-val-badge" class="segmented-badge">10 min antes</span>
+            </div>
+            <div class="segmented-control" id="control-buffer">
+              <input type="hidden" id="input-buffer" value="10" />
+              <button type="button" class="segmented-btn" data-value="5">5 min</button>
+              <button type="button" class="segmented-btn active" data-value="10">10 min</button>
+              <button type="button" class="segmented-btn" data-value="15">15 min</button>
+              <button type="button" class="segmented-btn" data-value="30">30 min</button>
+              <button type="button" class="segmented-btn" data-value="60">1 hora</button>
+            </div>
+            <div class="segmented-hint" id="buffer-hint-text">
+              Te avisará 10 minutos antes de la hora calculada de salida para bajar con calma.
+            </div>
           </div>
-          <div class="segmented-control" id="control-window">
-            <input type="hidden" id="input-window" value="30" />
-            <button type="button" class="segmented-btn" data-value="5">5 min</button>
-            <button type="button" class="segmented-btn" data-value="10">10 min</button>
-            <button type="button" class="segmented-btn" data-value="15">15 min</button>
-            <button type="button" class="segmented-btn active" data-value="30">30 min</button>
-            <button type="button" class="segmented-btn" data-value="60">1 hora</button>
-          </div>
-          <div class="segmented-hint" id="window-hint-text">
-            Sondeo adaptativo inteligente vigilando el tráfico desde 30 minutos antes de salir.
-          </div>
-        </div>
 
-        <button type="submit" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-          <span class="material-symbols-outlined" style="font-size: 18px;">save</span> Guardar Configuración de Rutina
-        </button>
-      </form>
-    </div>
+          <!-- Selector Horizontal de Ventana de Monitoreo (Pill Bar) -->
+          <div class="segmented-group" style="margin-top: 16px;">
+            <div class="segmented-header">
+              <label class="segmented-title">
+                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">history_toggle_off</span> Ventana de monitoreo inteligente:
+              </label>
+              <span id="window-val-badge" class="segmented-badge">30 min antes</span>
+            </div>
+            <div class="segmented-control" id="control-window">
+              <input type="hidden" id="input-window" value="30" />
+              <button type="button" class="segmented-btn" data-value="5">5 min</button>
+              <button type="button" class="segmented-btn" data-value="10">10 min</button>
+              <button type="button" class="segmented-btn" data-value="15">15 min</button>
+              <button type="button" class="segmented-btn active" data-value="30">30 min</button>
+              <button type="button" class="segmented-btn" data-value="60">1 hora</button>
+            </div>
+            <div class="segmented-hint" id="window-hint-text">
+              Sondeo adaptativo inteligente vigilando el tráfico desde 30 minutos antes de salir.
+            </div>
+          </div>
+
+          <button type="submit" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+            <span class="material-symbols-outlined" style="font-size: 18px;">save</span> Guardar Configuración de Rutina
+          </button>
+        </form>
+      </div>
+    </main>
   </div>
 
   <!-- Modal de Autenticación (Google Material 3) -->
@@ -397,6 +402,23 @@
       </div>
     </div>
   </div>
+
+  <!-- Barra de Navegación Inferior Fija (Bottom Nav estilo uiCookies / Google Maps) -->
+  <nav class="bnav" id="bottom-nav" aria-label="Navegación principal">
+    <button type="button" class="bnav-tab active" id="tab-nav-home" aria-current="page" title="Inicio">
+      <span class="material-symbols-outlined bnav-icon">home</span>
+      <span class="bnav-label">Inicio</span>
+    </button>
+    <div class="bnav-fab-wrap">
+      <button type="button" class="bnav-fab" id="btn-quick-refresh" title="Actualizar tráfico en vivo" aria-label="Actualizar tráfico en vivo">
+        <span class="material-symbols-outlined bnav-fab-icon" id="quick-refresh-icon">refresh</span>
+      </button>
+    </div>
+    <button type="button" class="bnav-tab" id="tab-nav-settings" title="Ajustes">
+      <span class="material-symbols-outlined bnav-icon">tune</span>
+      <span class="bnav-label">Ajustes</span>
+    </button>
+  </nav>
 
   <div id="toast">🔔 Mensaje</div>
 

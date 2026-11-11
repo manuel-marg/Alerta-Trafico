@@ -71,7 +71,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 16px 12px;
+  padding: 16px 12px 96px 12px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -1167,10 +1167,10 @@ label {
   background: var(--gmaps-surface);
 }
 
-/* Toast */
+/* Toast elevado sobre la barra de navegación */
 #toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 84px;
   left: 50%;
   transform: translateX(-50%) translateY(100px);
   background: #323232;
@@ -1179,15 +1179,150 @@ label {
   border-radius: 24px;
   font-size: 0.88rem;
   font-weight: 400;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
   opacity: 0;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 9999;
+  z-index: 10005;
 }
 
 #toast.show {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
+}
+
+/* Vistas de la Aplicación */
+.app-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Barra de Navegación Inferior Fija (Google Maps / uiCookies Style) */
+.bnav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid var(--gmaps-border);
+  box-shadow: 0 -2px 12px rgba(60, 64, 67, 0.1);
+  padding: 8px 24px calc(8px + env(safe-area-inset-bottom, 8px));
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 9990;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.bnav-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 0;
+  color: var(--gmaps-text-secondary);
+  position: relative;
+  transition: all 0.2s ease;
+  border-radius: 12px;
+}
+
+.bnav-icon {
+  font-size: 24px;
+  transition: transform 0.2s ease;
+}
+
+.bnav-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-family: var(--gmaps-font);
+}
+
+.bnav-tab:hover {
+  color: var(--gmaps-text-primary);
+}
+
+.bnav-tab.active {
+  color: var(--gmaps-blue);
+}
+
+.bnav-tab.active .bnav-label {
+  font-weight: 600;
+}
+
+.bnav-tab.active .bnav-icon {
+  transform: translateY(-2px);
+}
+
+/* Indicador activo superior en la pestaña */
+.bnav-tab.active::after {
+  content: "";
+  position: absolute;
+  top: -8px;
+  width: 34px;
+  height: 3px;
+  border-radius: 99px;
+  background: var(--gmaps-blue);
+}
+
+/* Botón flotante central elevado (FAB) */
+.bnav-fab-wrap {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+}
+
+.bnav-fab {
+  width: 52px;
+  height: 52px;
+  border: none;
+  outline: none;
+  border-radius: 50%;
+  background: var(--gmaps-blue);
+  color: #ffffff;
+  cursor: pointer;
+  margin: -24px 0 0 0;
+  box-shadow: 0 6px 16px rgba(26, 115, 232, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bnav-fab:hover {
+  background: var(--gmaps-blue-hover);
+  transform: scale(1.06);
+  box-shadow: 0 8px 20px rgba(26, 115, 232, 0.55);
+}
+
+.bnav-fab:active {
+  transform: scale(0.94);
+}
+
+.bnav-fab-icon {
+  font-size: 26px;
+  transition: transform 0.4s ease;
+}
+
+.bnav-fab.spinning .bnav-fab-icon {
+  animation: spinFab 0.8s linear infinite;
+}
+
+@keyframes spinFab {
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes fadeIn {
@@ -1197,7 +1332,7 @@ label {
 
 @media (max-width: 500px) {
   body {
-    padding: 10px 8px;
+    padding: 10px 8px 96px 8px;
   }
   .gmaps-search-card {
     border-radius: 20px;
