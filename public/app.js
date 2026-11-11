@@ -8,12 +8,95 @@ let currentUser = null;
 // Coordenadas guardadas
 let originCoords = null;
 let destinationCoords = null;
+let isRouteEditorManuallyOpen = false;
+let toastTimer = null;
+let homeRedirectTimer = null;
 
 // Estado del modal de mapa
 let leafletMap = null;
 let currentMarker = null;
 let currentPickerTarget = 'origin'; // 'origin' o 'destination'
 let selectedPinData = { lat: null, lng: null, address: '' };
+
+function hasValidCoords(coords) {
+  return Boolean(
+    coords &&
+    coords.lat !== null && coords.lat !== undefined &&
+    coords.lng !== null && coords.lng !== undefined &&
+    Number.isFinite(Number(coords.lat)) &&
+    Number.isFinite(Number(coords.lng))
+  );
+}
+
+function hasBothLocationsConfigured() {
+  return hasValidCoords(originCoords) && hasValidCoords(destinationCoords);
+}
+
+function renderRouteEditorVisibility() {
+  const editorCard = document.getElementById('route-editor-card');
+  const editorHeader = document.getElementById('route-editor-header');
+  const previewTrigger = document.getElementById('route-preview-trigger');
+  const chevron = document.getElementById('route-preview-chevron');
+  if (!editorCard) return;
+
+  if (!currentUser) {
+    editorCard.style.display = 'none';
+    if (editorHeader) editorHeader.style.display = 'none';
+    if (previewTrigger) {
+      previewTrigger.classList.remove('active');
+      previewTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (chevron) chevron.textContent = 'edit';
+    return;
+  }
+
+  const bothConfigured = hasBothLocationsConfigured();
+
+  if (!bothConfigured) {
+    editorCard.style.display = 'block';
+    if (editorHeader) editorHeader.style.display = 'none';
+    if (previewTrigger) {
+      previewTrigger.classList.remove('active');
+      previewTrigger.setAttribute('aria-expanded', 'true');
+    }
+    if (chevron) chevron.textContent = 'edit';
+    return;
+  }
+
+  if (isRouteEditorManuallyOpen) {
+    editorCard.style.display = 'block';
+    if (editorHeader) editorHeader.style.display = 'flex';
+    if (previewTrigger) {
+      previewTrigger.classList.add('active');
+      previewTrigger.setAttribute('aria-expanded', 'true');
+    }
+    if (chevron) chevron.textContent = 'expand_less';
+  } else {
+    editorCard.style.display = 'none';
+    if (editorHeader) editorHeader.style.display = 'none';
+    if (previewTrigger) {
+      previewTrigger.classList.remove('active');
+      previewTrigger.setAttribute('aria-expanded', 'false');
+    }
+    if (chevron) chevron.textContent = 'edit';
+  }
+}
+
+function toggleRouteEditor(forceOpen = null) {
+  if (!hasBothLocationsConfigured()) {
+    isRouteEditorManuallyOpen = false;
+    renderRouteEditorVisibility();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  isRouteEditorManuallyOpen = forceOpen !== null ? Boolean(forceOpen) : !isRouteEditorManuallyOpen;
+  renderRouteEditorVisibility();
+
+  if (isRouteEditorManuallyOpen) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
 
 // Helper para convertir la clave VAPID de Base64 a Uint8Array
 function urlBase64ToUint8Array(base64String) {
@@ -34,10 +117,13 @@ function urlBase64ToUint8Array(base64String) {
 // Mostrar Toast
 function showToast(message) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.innerHTML = message;
   toast.classList.add('show');
-  setTimeout(() => {
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
     toast.classList.remove('show');
+    toastTimer = null;
   }, 4000);
 }
 
@@ -77,6 +163,8 @@ async function checkAuthStatus() {
       await syncPushSubscriptionIfGranted();
     } else {
       currentUser = null;
+      isRouteEditorManuallyOpen = false;
+      renderRouteEditorVisibility();
       if (btnUserAvatar) btnUserAvatar.style.display = 'none';
       if (btnOpenLogin) btnOpenLogin.style.display = 'inline-flex';
       if (userDropdown) userDropdown.style.display = 'none';
@@ -200,10 +288,13 @@ async function handleLogout() {
     originCoords = null;
     destinationCoords = null;
     currentConfig = null;
+    currentUser = null;
+    isRouteEditorManuallyOpen = false;
     document.getElementById('input-origin').value = '';
     document.getElementById('input-destination').value = '';
     renderCoordsPreview('origin');
     renderCoordsPreview('destination');
+    renderRouteEditorVisibility();
     showToast('👋 Sesión cerrada correctamente');
     await checkAuthStatus();
   } catch (err) {
@@ -438,7 +529,7 @@ function openMapModal(target) {
     leafletMap.invalidateSize();
 
     let targetCoords = target === 'origin' ? originCoords : destinationCoords;
-    if (targetCoords && targetCoords.lat && targetCoords.lng) {
+    if (hasValidCoords(targetCoords)) {
       leafletMap.setView([targetCoords.lat, targetCoords.lng], 16);
       setPinOnMap(targetCoords.lat, targetCoords.lng);
       const existingAddress = target === 'origin' 
@@ -449,6 +540,11 @@ function openMapModal(target) {
         addressText.innerHTML = `<span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px; margin-right: 4px;">pin_drop</span> ${existingAddress}`;
       }
     } else {
+      selectedPinData = { lat: null, lng: null, address: '' };
+      if (currentMarker && leafletMap) {
+        leafletMap.removeLayer(currentMarker);
+        currentMarker = null;
+      }
       coordsText.textContent = 'Coordenadas: --';
       addressText.textContent = 'Haz clic en el mapa o busca arriba para colocar el pin...';
     }
@@ -521,6 +617,7 @@ async function confirmPinSelection() {
     return;
   }
 
+  const hadBothBefore = hasBothLocationsConfigured();
   const payload = {};
   if (currentPickerTarget === 'origin') {
     originCoords = { lat: selectedPinData.lat, lng: selectedPinData.lng };
@@ -539,7 +636,16 @@ async function confirmPinSelection() {
   }
 
   closeMapModal();
-  await saveConfigPartial(payload, '💾 Ubicación guardada en tu cuenta');
+
+  const hasBothNow = hasBothLocationsConfigured();
+  let toastMsg = '💾 Ubicación guardada en tu cuenta';
+  if (!hadBothBefore && hasBothNow) {
+    isRouteEditorManuallyOpen = false;
+    toastMsg = '✅ Ruta configurada. Pulsa tu ruta abajo cuando quieras editarla.';
+  }
+  renderRouteEditorVisibility();
+
+  await saveConfigPartial(payload, toastMsg);
 }
 
 function renderCoordsPreview(target) {
@@ -664,6 +770,8 @@ async function loadConfig() {
     destinationCoords = currentConfig.destinationCoords || null;
     renderCoordsPreview('origin');
     renderCoordsPreview('destination');
+    isRouteEditorManuallyOpen = false;
+    renderRouteEditorVisibility();
 
     const badgeApi = document.getElementById('badge-api');
     const badgeApiText = document.getElementById('badge-api-text');
@@ -858,6 +966,10 @@ async function handleConfigSubmit(e) {
     return;
   }
 
+  const form = e.target;
+  const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+  if (submitBtn) submitBtn.disabled = true;
+
   const origin = document.getElementById('input-origin').value;
   const destination = document.getElementById('input-destination').value;
   const targetArrivalTime = document.getElementById('input-target-time').value;
@@ -882,14 +994,21 @@ async function handleConfigSubmit(e) {
     });
 
     if (resp.ok) {
-      showToast('💾 Configuración guardada correctamente en tu cuenta');
+      showToast('✅ Configuración de rutina guardada correctamente');
       await loadConfig();
       await checkTrafficNow();
+      if (homeRedirectTimer) clearTimeout(homeRedirectTimer);
+      homeRedirectTimer = setTimeout(() => {
+        homeRedirectTimer = null;
+        switchView('home', false);
+      }, 650);
     } else {
       showToast('❌ Error al guardar la configuración');
     }
   } catch (err) {
     showToast('❌ Error de conexión al guardar');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
@@ -906,32 +1025,41 @@ async function resetTodayState() {
 }
 
 // --- 6. Menú Móvil Inferior (Bottom Navigation Bar) ---
-function initBottomNav() {
+function switchView(target, cancelPendingRedirect = true) {
+  if (cancelPendingRedirect && homeRedirectTimer) {
+    clearTimeout(homeRedirectTimer);
+    homeRedirectTimer = null;
+  }
+
   const tabHome = document.getElementById('tab-nav-home');
   const tabSettings = document.getElementById('tab-nav-settings');
   const viewHome = document.getElementById('view-home');
   const viewSettings = document.getElementById('view-settings');
-  const btnQuickRefresh = document.getElementById('btn-quick-refresh');
+  if (!tabHome || !tabSettings || !viewHome || !viewSettings) return;
 
-  function switchView(target) {
-    if (target === 'home') {
-      viewHome.style.display = 'flex';
-      viewSettings.style.display = 'none';
-      tabHome.classList.add('active');
-      tabHome.setAttribute('aria-current', 'page');
-      tabSettings.classList.remove('active');
-      tabSettings.removeAttribute('aria-current');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else {
-      viewHome.style.display = 'none';
-      viewSettings.style.display = 'flex';
-      tabSettings.classList.add('active');
-      tabSettings.setAttribute('aria-current', 'page');
-      tabHome.classList.remove('active');
-      tabHome.removeAttribute('aria-current');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+  if (target === 'home') {
+    viewHome.style.display = 'flex';
+    viewSettings.style.display = 'none';
+    tabHome.classList.add('active');
+    tabHome.setAttribute('aria-current', 'page');
+    tabSettings.classList.remove('active');
+    tabSettings.removeAttribute('aria-current');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    viewHome.style.display = 'none';
+    viewSettings.style.display = 'flex';
+    tabSettings.classList.add('active');
+    tabSettings.setAttribute('aria-current', 'page');
+    tabHome.classList.remove('active');
+    tabHome.removeAttribute('aria-current');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+}
+
+function initBottomNav() {
+  const tabHome = document.getElementById('tab-nav-home');
+  const tabSettings = document.getElementById('tab-nav-settings');
+  const btnQuickRefresh = document.getElementById('btn-quick-refresh');
 
   if (tabHome && tabSettings) {
     tabHome.addEventListener('click', () => switchView('home'));
@@ -1096,6 +1224,27 @@ document.addEventListener('DOMContentLoaded', async () => {
       closeMapModal();
     }
   });
+
+  // Desplegar/ocultar editor de ruta desde la tarjeta inferior y atajos a Ajustes
+  const routePreviewTrigger = document.getElementById('route-preview-trigger');
+  if (routePreviewTrigger) {
+    routePreviewTrigger.addEventListener('click', () => toggleRouteEditor());
+  }
+
+  const btnCollapseRoute = document.getElementById('btn-collapse-route');
+  if (btnCollapseRoute) {
+    btnCollapseRoute.addEventListener('click', () => toggleRouteEditor(false));
+  }
+
+  const chipTargetTime = document.getElementById('chip-target-time');
+  if (chipTargetTime) {
+    chipTargetTime.addEventListener('click', () => switchView('settings'));
+  }
+
+  const chipBuffer = document.getElementById('chip-buffer');
+  if (chipBuffer) {
+    chipBuffer.addEventListener('click', () => switchView('settings'));
+  }
 
   // Selectores de Barra Horizontal (Segmented Controls estilo CodePen / Material 3)
   setupSegmentedControl('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', BUFFER_HINTS, 'bufferMinutes');

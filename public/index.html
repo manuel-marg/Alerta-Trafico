@@ -90,8 +90,17 @@
         </button>
       </div>
 
-      <!-- Google Maps Floating Route Box (Selector Origen ➔ Destino) -->
-      <div class="gmaps-card gmaps-route-card">
+      <!-- Google Maps Floating Route Box (Selector Origen ➔ Destino, oculto por defecto si ya está configurado) -->
+      <div id="route-editor-card" class="gmaps-card gmaps-route-card" style="display: none;">
+        <div id="route-editor-header" class="route-editor-header" style="display: none;">
+          <span class="route-editor-title">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-blue);">edit_location_alt</span>
+            Configurar ruta guardada
+          </span>
+          <button type="button" id="btn-collapse-route" class="route-collapse-btn" title="Ocultar editor">
+            <span class="material-symbols-outlined" style="font-size: 16px;">expand_less</span> Listo
+          </button>
+        </div>
         <div class="route-inputs-container">
           <!-- Indicador visual de puntos (Punto azul -> Línea punteada -> Pin rojo) -->
           <div class="route-indicators-track">
@@ -169,24 +178,24 @@
           </div>
         </div>
 
-        <!-- Estadísticas de Google Maps -->
+        <!-- Estadísticas de Google Maps (Llegada meta y Margen extra abren Ajustes al pulsar) -->
         <div class="gmaps-stats-chips">
-          <div class="gmaps-stat-chip">
+          <button type="button" id="chip-target-time" class="gmaps-stat-chip chip-interactive" title="Pulsa para ajustar la hora de llegada">
             <span class="chip-label">Llegada meta</span>
             <strong id="stat-arrival-target" class="chip-value">--:--</strong>
-          </div>
-          <div class="gmaps-stat-chip">
+          </button>
+          <button type="button" id="chip-buffer" class="gmaps-stat-chip chip-interactive" title="Pulsa para ajustar el margen extra">
             <span class="chip-label">Margen extra</span>
             <strong id="stat-buffer" class="chip-value">-- min</strong>
-          </div>
+          </button>
           <div class="gmaps-stat-chip">
             <span class="chip-label">Distancia</span>
             <strong id="stat-distance" class="chip-value">-- km</strong>
           </div>
         </div>
 
-        <!-- Puntos de Ruta -->
-        <div class="gmaps-route-preview">
+        <!-- Puntos de Ruta (Pulsa para desplegar / editar ubicaciones de Casa y Trabajo) -->
+        <button type="button" id="route-preview-trigger" class="gmaps-route-preview route-preview-interactive" title="Pulsa para editar origen y destino">
           <div class="route-preview-point">
             <span class="preview-dot blue-dot"></span>
             <span id="display-origin" class="preview-text">Mi Casa</span>
@@ -198,7 +207,8 @@
             <span class="preview-dot red-dot"></span>
             <span id="display-destination" class="preview-text">Mi Trabajo</span>
           </div>
-        </div>
+          <span class="material-symbols-outlined route-preview-edit-icon" id="route-preview-chevron">edit</span>
+        </button>
 
         <!-- Botones de Acción Estilo Google Maps -->
         <div class="gmaps-actions-row">

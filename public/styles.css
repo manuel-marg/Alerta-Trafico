@@ -396,6 +396,45 @@ body {
 .gmaps-route-card {
   padding: 16px;
   border-radius: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.route-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--gmaps-border-subtle);
+}
+
+.route-editor-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gmaps-text-primary);
+}
+
+.route-collapse-btn {
+  background: var(--gmaps-blue-tonal);
+  color: var(--gmaps-blue);
+  border: none;
+  border-radius: 16px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-family: var(--gmaps-font);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.route-collapse-btn:hover {
+  background: #d2e3fc;
 }
 
 .route-inputs-container {
@@ -656,10 +695,31 @@ body {
 }
 
 .gmaps-stat-chip {
+  width: 100%;
   background: var(--gmaps-surface-variant);
   border-radius: 12px;
   padding: 10px;
   text-align: center;
+  border: 1px solid transparent;
+  font-family: var(--gmaps-font);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.chip-interactive {
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.chip-interactive:hover {
+  background: var(--gmaps-blue-tonal);
+  border-color: rgba(26, 115, 232, 0.25);
+}
+
+.chip-interactive:active {
+  transform: scale(0.97);
 }
 
 .chip-label {
@@ -675,7 +735,7 @@ body {
   color: var(--gmaps-text-primary);
 }
 
-/* Route Preview */
+/* Route Preview Interactive Bar */
 .gmaps-route-preview {
   display: flex;
   align-items: center;
@@ -687,14 +747,41 @@ body {
   font-size: 0.84rem;
 }
 
+.route-preview-interactive {
+  width: 100%;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: var(--gmaps-font);
+  text-align: left;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.route-preview-interactive:hover,
+.route-preview-interactive.active {
+  background: var(--gmaps-blue-tonal);
+  border-color: rgba(26, 115, 232, 0.25);
+}
+
+.route-preview-interactive:active {
+  transform: scale(0.985);
+}
+
 .route-preview-point {
   display: flex;
   align-items: center;
   gap: 6px;
-  max-width: 44%;
+  max-width: 40%;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.route-preview-edit-icon {
+  font-size: 16px;
+  color: var(--gmaps-blue);
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .preview-dot {
@@ -710,6 +797,7 @@ body {
 .preview-text {
   font-weight: 500;
   color: var(--gmaps-text-primary);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -717,6 +805,9 @@ body {
 .preview-connector {
   color: var(--gmaps-text-muted);
   font-size: 0.85rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 /* Action Buttons: Google Maps Material 3 Pills */
