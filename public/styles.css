@@ -1274,7 +1274,7 @@ label {
   background: var(--gmaps-blue);
 }
 
-/* Botón flotante central elevado (FAB) */
+/* Botón central integrado en la barra */
 .bnav-fab-wrap {
   flex: none;
   display: flex;
@@ -1284,16 +1284,16 @@ label {
 }
 
 .bnav-fab {
-  width: 52px;
-  height: 52px;
+  width: 46px;
+  height: 46px;
   border: none;
   outline: none;
   border-radius: 50%;
   background: var(--gmaps-blue);
   color: #ffffff;
   cursor: pointer;
-  margin: -24px 0 0 0;
-  box-shadow: 0 6px 16px rgba(26, 115, 232, 0.45);
+  margin: 0;
+  box-shadow: 0 3px 10px rgba(26, 115, 232, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1303,7 +1303,7 @@ label {
 .bnav-fab:hover {
   background: var(--gmaps-blue-hover);
   transform: scale(1.06);
-  box-shadow: 0 8px 20px rgba(26, 115, 232, 0.55);
+  box-shadow: 0 4px 14px rgba(26, 115, 232, 0.45);
 }
 
 .bnav-fab:active {
@@ -1311,7 +1311,7 @@ label {
 }
 
 .bnav-fab-icon {
-  font-size: 26px;
+  font-size: 24px;
   transition: transform 0.4s ease;
 }
 
