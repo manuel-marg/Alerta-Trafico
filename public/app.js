@@ -9,7 +9,6 @@ let currentUser = null;
 let originCoords = null;
 let destinationCoords = null;
 let isRouteEditorManuallyOpen = false;
-let toastTimer = null;
 let homeRedirectTimer = null;
 
 // Estado del modal de mapa
@@ -114,17 +113,223 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// Mostrar Toast
-function showToast(message) {
-  const toast = document.getElementById('toast');
-  if (!toast) return;
-  toast.innerHTML = message;
-  toast.classList.add('show');
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-    toastTimer = null;
-  }, 4000);
+// --- Sistema de Notificaciones Toastify-Pro (Tema Blanco / Claro) ---
+const Toast = (() => {
+  const ICONS = {
+    success: '<svg viewBox="0 0 24 24"><path d="m5 13 4 4 10-11"/></svg>',
+    error: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    warning: '<svg viewBox="0 0 24 24"><path d="M12 7v6"/><circle cx="12" cy="17" r="0.5"/></svg>',
+    info: '<svg viewBox="0 0 24 24"><path d="M12 11v6"/><circle cx="12" cy="7" r="0.5"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 9-6 6m0-6 6 6m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>'
+  };
+
+  const COLORS = {
+    success: '#22c55e',
+    error: '#ef4444',
+    warning: '#f59e0b',
+    info: '#3b82f6',
+    loading: '#8b93a7'
+  };
+
+  const POSITIONS = ['top-right', 'top-left', 'top-center', 'bottom-right', 'bottom-left', 'bottom-center'];
+  const containers = {};
+
+  const defaults = {
+    type: 'info',
+    title: '',
+    message: '',
+    duration: 3800,
+    position: 'top-right',
+    theme: 'light',
+    closable: true,
+    progress: true,
+    pauseOnHover: true,
+    maxVisible: 3,
+    icon: null,
+    action: null,
+    onClose: null
+  };
+
+  function getContainer(position, theme) {
+    const key = `${position}|${theme}`;
+    if (containers[key] && document.body.contains(containers[key])) return containers[key];
+    const c = document.createElement('div');
+    c.className = `tst-container tst-${position}${theme === 'light' ? ' tst-light' : ''}`;
+    document.body.appendChild(c);
+    containers[key] = c;
+    return c;
+  }
+
+  class ToastInstance {
+    constructor(opts) {
+      this.o = Object.assign({}, defaults, opts);
+      if (!POSITIONS.includes(this.o.position)) this.o.position = 'top-right';
+
+      this.container = getContainer(this.o.position, this.o.theme);
+      this._trimStack();
+
+      this.el = document.createElement('div');
+      this.el.className = 'tst';
+      this.el.setAttribute('role', this.o.type === 'error' ? 'alert' : 'status');
+      this.el.style.setProperty('--tst-accent', COLORS[this.o.type] || COLORS.info);
+      this._render();
+      this.container.appendChild(this.el);
+
+      requestAnimationFrame(() => requestAnimationFrame(() => this.el.classList.add('tst-in')));
+
+      this._startTimer();
+      this._bindEvents();
+    }
+
+    _render() {
+      const o = this.o;
+      const iconHtml = o.type === 'loading'
+        ? '<div class="tst-spin"></div>'
+        : (o.icon || ICONS[o.type] || ICONS.info);
+
+      this.el.innerHTML = `
+        <div class="tst-icon">${iconHtml}</div>
+        <div class="tst-body">
+          ${o.title ? '<p class="tst-title"></p>' : ''}
+          <p class="tst-msg"></p>
+          ${o.action ? '<button type="button" class="tst-action"></button>' : ''}
+        </div>
+        ${o.closable ? `<button type="button" class="tst-close" aria-label="Cerrar">${ICONS.close}</button>` : ''}
+        ${(o.progress && o.duration > 0) ? '<div class="tst-bar"></div>' : ''}`;
+
+      if (o.title) this.el.querySelector('.tst-title').textContent = o.title;
+      this.el.querySelector('.tst-msg').textContent = o.message;
+      if (o.action) this.el.querySelector('.tst-action').textContent = o.action.label || 'OK';
+
+      this.bar = this.el.querySelector('.tst-bar');
+    }
+
+    _bindEvents() {
+      const closeBtn = this.el.querySelector('.tst-close');
+      if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+
+      const actionBtn = this.el.querySelector('.tst-action');
+      if (actionBtn) {
+        actionBtn.addEventListener('click', () => {
+          if (typeof this.o.action.onClick === 'function') this.o.action.onClick(this);
+          this.close();
+        });
+      }
+
+      if (this.o.pauseOnHover && this.o.duration > 0) {
+        this.el.addEventListener('mouseenter', () => this._pause());
+        this.el.addEventListener('mouseleave', () => this._resume());
+      }
+
+      let startX = null;
+      this.el.addEventListener('pointerdown', (e) => { startX = e.clientX; });
+      this.el.addEventListener('pointerup', (e) => {
+        if (startX !== null && e.clientX - startX > 60) this.close();
+        startX = null;
+      });
+    }
+
+    _startTimer() {
+      if (this.o.duration <= 0) return;
+      this.remaining = this.o.duration;
+      this._tick();
+    }
+
+    _tick() {
+      this.startedAt = Date.now();
+      this.timer = setTimeout(() => this.close(), this.remaining);
+      if (this.bar) {
+        this.bar.style.transition = 'none';
+        this.bar.style.transform = `scaleX(${this.remaining / this.o.duration})`;
+        void this.bar.offsetWidth;
+        requestAnimationFrame(() => {
+          if (!this.bar) return;
+          this.bar.style.transition = `transform ${this.remaining}ms linear`;
+          this.bar.style.transform = 'scaleX(0)';
+        });
+      }
+    }
+
+    _pause() {
+      if (!this.timer) return;
+      clearTimeout(this.timer);
+      this.timer = null;
+      this.remaining -= Date.now() - this.startedAt;
+      if (this.bar) {
+        const ratio = Math.max(this.remaining, 0) / this.o.duration;
+        this.bar.style.transition = 'none';
+        this.bar.style.transform = `scaleX(${ratio})`;
+      }
+    }
+
+    _resume() {
+      if (this.timer || this.remaining === undefined || this.o.duration <= 0) return;
+      if (this.remaining <= 0) return this.close();
+      this._tick();
+    }
+
+    _trimStack() {
+      const toasts = this.container.querySelectorAll('.tst:not(.tst-out)');
+      const excess = toasts.length - (this.o.maxVisible - 1);
+      for (let i = 0; i < excess; i++) {
+        const inst = toasts[i]._tst;
+        if (inst) inst.close();
+        else toasts[i].remove();
+      }
+    }
+
+    update(opts) {
+      clearTimeout(this.timer);
+      this.timer = null;
+      Object.assign(this.o, opts);
+      this.el.style.setProperty('--tst-accent', COLORS[this.o.type] || COLORS.info);
+      this._render();
+      this._bindEvents();
+      this._startTimer();
+      return this;
+    }
+
+    close() {
+      if (this._closing) return;
+      this._closing = true;
+      clearTimeout(this.timer);
+      this.el.classList.remove('tst-in');
+      this.el.classList.add('tst-out');
+      const done = () => {
+        this.el.remove();
+        if (typeof this.o.onClose === 'function') this.o.onClose(this);
+      };
+      this.el.addEventListener('transitionend', done, { once: true });
+      setTimeout(done, 400);
+    }
+  }
+
+  return {
+    show(opts = {}) {
+      const t = new ToastInstance(opts);
+      t.el._tst = t;
+      return t;
+    },
+    success(message, opts = {}) { return this.show({ ...opts, type: 'success', message }); },
+    error(message, opts = {}) { return this.show({ ...opts, type: 'error', message }); },
+    warning(message, opts = {}) { return this.show({ ...opts, type: 'warning', message }); },
+    info(message, opts = {}) { return this.show({ ...opts, type: 'info', message }); },
+    loading(message, opts = {}) {
+      return this.show({ ...opts, type: 'loading', message, duration: 0, closable: false, progress: false });
+    },
+    clear() {
+      document.querySelectorAll('.tst').forEach(el => (el._tst ? el._tst.close() : el.remove()));
+    }
+  };
+})();
+
+// Mostrar Toast (compatible con string u objeto de opciones)
+function showToast(msgOrOpts, type = 'info', extraOpts = {}) {
+  if (msgOrOpts && typeof msgOrOpts === 'object') {
+    return Toast.show(msgOrOpts);
+  }
+  const cleanMsg = String(msgOrOpts || '').replace(/^[\u{1F300}-\u{1FAFF}\u2600-\u27BF⇅]+\s*/u, '').trim();
+  return Toast.show({ type, message: cleanMsg, ...extraOpts });
 }
 
 // --- 1. Autenticación y Gestión de Sesión Multi-usuario ---
@@ -241,7 +446,7 @@ async function handleLoginSubmit(e) {
     const data = await resp.json();
 
     if (resp.ok && data.success) {
-      showToast(`👋 ¡Bienvenido, ${data.user.name}!`);
+      Toast.success(`¡Bienvenido de nuevo, ${data.user.name}!`, { title: 'Sesión iniciada' });
       document.getElementById('form-login').reset();
       await checkAuthStatus();
     } else {
@@ -269,7 +474,7 @@ async function handleRegisterSubmit(e) {
     const data = await resp.json();
 
     if (resp.ok && data.success) {
-      showToast(`🎉 ¡Cuenta creada con éxito! Bienvenido, ${data.user.name}`);
+      Toast.success(`Tu cuenta fue creada. ¡Bienvenido, ${data.user.name}!`, { title: 'Cuenta creada' });
       document.getElementById('form-register').reset();
       await checkAuthStatus();
     } else {
@@ -295,10 +500,10 @@ async function handleLogout() {
     renderCoordsPreview('origin');
     renderCoordsPreview('destination');
     renderRouteEditorVisibility();
-    showToast('👋 Sesión cerrada correctamente');
+    Toast.info('Has cerrado sesión correctamente.', { title: 'Sesión cerrada' });
     await checkAuthStatus();
   } catch (err) {
-    showToast('Error al cerrar sesión');
+    Toast.error('No se pudo cerrar sesión.', { title: 'Error' });
   }
 }
 
@@ -361,20 +566,20 @@ function updatePushBadge(status, label) {
 
 async function subscribeUserToPush() {
   if (!currentUser) {
-    showToast('⚠️ Inicia sesión para activar las notificaciones en tu cuenta');
+    Toast.warning('Inicia sesión para activar las notificaciones en tu cuenta.', { title: 'Sesión requerida' });
     showAuthModal('login');
     return;
   }
 
   if (!swRegistration) {
-    showToast('❌ El Service Worker aún no está listo');
+    Toast.error('El Service Worker aún no está listo. Recarga la página.', { title: 'Push no disponible' });
     return;
   }
 
   try {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
-      showToast('⚠️ Permiso de notificaciones denegado en el navegador');
+      Toast.warning('Permiso de notificaciones denegado en el navegador.', { title: 'Permiso denegado' });
       updatePushBadge('error', 'Permiso Denegado');
       return;
     }
@@ -396,10 +601,10 @@ async function subscribeUserToPush() {
 
     updatePushBadge('active', 'Push Activo');
     document.getElementById('push-activation-card').style.display = 'none';
-    showToast('🎉 ¡Notificaciones Push activadas para tu cuenta!');
+    Toast.success('Notificaciones Push activadas para tu cuenta.', { title: 'Alertas activadas' });
   } catch (err) {
     console.error('Error suscribiendo al usuario:', err);
-    showToast('❌ Error activando las notificaciones');
+    Toast.error('No se pudieron activar las notificaciones.', { title: 'Error de Push' });
   }
 }
 
@@ -560,7 +765,7 @@ function closeMapModal() {
 // Guardar cambios parciales o completos directamente en la base de datos SQLite del usuario
 async function saveConfigPartial(payload, customToastMsg = null) {
   if (!currentUser) {
-    showToast('⚠️ Inicia sesión para guardar tu configuración en tu cuenta');
+    Toast.warning('Inicia sesión para guardar tu configuración.', { title: 'Sesión requerida' });
     showAuthModal('login');
     return false;
   }
@@ -590,7 +795,7 @@ async function saveConfigPartial(payload, customToastMsg = null) {
       }
 
       if (customToastMsg) {
-        showToast(customToastMsg);
+        showToast(customToastMsg, 'success');
       }
 
       // Recalcular ruta en vivo automáticamente cuando cambia origen, destino u horario
@@ -601,19 +806,19 @@ async function saveConfigPartial(payload, customToastMsg = null) {
       }
       return true;
     } else {
-      showToast('❌ Error al guardar en la base de datos');
+      Toast.error('Error al guardar en la base de datos.', { title: 'No se pudo guardar' });
       return false;
     }
   } catch (err) {
     console.error('Error guardando configuración:', err);
-    showToast('❌ Error de conexión al guardar');
+    Toast.error('Error de conexión al guardar los cambios.', { title: 'Sin conexión' });
     return false;
   }
 }
 
 async function confirmPinSelection() {
   if (!selectedPinData.lat || !selectedPinData.lng) {
-    showToast('⚠️ Por favor haz clic en el mapa para colocar el pin primero');
+    Toast.warning('Haz clic en el mapa para colocar el pin primero.', { title: 'Falta ubicación' });
     return;
   }
 
@@ -638,14 +843,14 @@ async function confirmPinSelection() {
   closeMapModal();
 
   const hasBothNow = hasBothLocationsConfigured();
-  let toastMsg = '💾 Ubicación guardada en tu cuenta';
+  let toastOpts = { type: 'success', title: 'Ubicación actualizada', message: 'Ubicación guardada en tu cuenta.' };
   if (!hadBothBefore && hasBothNow) {
     isRouteEditorManuallyOpen = false;
-    toastMsg = '✅ Ruta configurada. Pulsa tu ruta abajo cuando quieras editarla.';
+    toastOpts = { type: 'success', title: 'Ruta configurada', message: 'Pulsa tu ruta abajo cuando quieras editarla.' };
   }
   renderRouteEditorVisibility();
 
-  await saveConfigPartial(payload, toastMsg);
+  await saveConfigPartial(payload, toastOpts);
 }
 
 function renderCoordsPreview(target) {
@@ -931,13 +1136,13 @@ function renderDashboard(check) {
 
 async function triggerTestNotification() {
   if (!currentUser) {
-    showToast('⚠️ Inicia sesión para probar las notificaciones de tu cuenta');
+    Toast.warning('Inicia sesión para probar las notificaciones.', { title: 'Sesión requerida' });
     showAuthModal('login');
     return;
   }
 
   try {
-    showToast('Enviando notificación de prueba...');
+    Toast.info('Enviando notificación de prueba...', { title: 'Prueba de alarma', duration: 2500 });
     const resp = await fetch('/api/test-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -948,12 +1153,12 @@ async function triggerTestNotification() {
     });
     const result = await resp.json();
     if (result.sentTo > 0) {
-      showToast(`✅ Notificación enviada a ${result.sentTo} dispositivo(s)`);
+      Toast.success(`Notificación enviada a ${result.sentTo} dispositivo(s).`, { title: 'Prueba enviada' });
     } else {
-      showToast('⚠️ No hay dispositivos suscritos. Haz clic en "Activar" arriba primero.');
+      Toast.warning('No hay dispositivos suscritos. Pulsa "Activar" arriba primero.', { title: 'Sin dispositivos' });
     }
   } catch (err) {
-    showToast('❌ Error al enviar la notificación de prueba');
+    Toast.error('Error al enviar la notificación de prueba.', { title: 'Error de envío' });
   }
 }
 
@@ -961,7 +1166,7 @@ async function handleConfigSubmit(e) {
   e.preventDefault();
 
   if (!currentUser) {
-    showToast('⚠️ Por favor inicia sesión primero para guardar tu configuración');
+    Toast.warning('Inicia sesión primero para guardar tu configuración.', { title: 'Sesión requerida' });
     showAuthModal('login');
     return;
   }
@@ -994,7 +1199,9 @@ async function handleConfigSubmit(e) {
     });
 
     if (resp.ok) {
-      showToast('✅ Configuración de rutina guardada correctamente');
+      Toast.success('Tu horario y márgenes fueron actualizados correctamente.', {
+        title: 'Configuración de rutina guardada'
+      });
       await loadConfig();
       await checkTrafficNow();
       if (homeRedirectTimer) clearTimeout(homeRedirectTimer);
@@ -1003,10 +1210,10 @@ async function handleConfigSubmit(e) {
         switchView('home', false);
       }, 650);
     } else {
-      showToast('❌ Error al guardar la configuración');
+      Toast.error('No se pudo guardar la configuración.', { title: 'Error al guardar' });
     }
   } catch (err) {
-    showToast('❌ Error de conexión al guardar');
+    Toast.error('Error de conexión al guardar.', { title: 'Sin conexión' });
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }
@@ -1017,10 +1224,10 @@ async function resetTodayState() {
   try {
     const resp = await fetch('/api/reset-today', { method: 'POST' });
     const data = await resp.json();
-    showToast(`🔄 ${data.message}`);
+    Toast.info(data.message, { title: 'Alerta reiniciada' });
     await checkTrafficNow();
   } catch (e) {
-    showToast('Error al reiniciar');
+    Toast.error('Error al reiniciar la alerta diaria.', { title: 'Error' });
   }
 }
 
@@ -1070,7 +1277,7 @@ function initBottomNav() {
     btnQuickRefresh.addEventListener('click', async () => {
       switchView('home');
       btnQuickRefresh.classList.add('spinning');
-      showToast('🔄 Calculando tiempo y tráfico actual...');
+      Toast.info('Calculando tiempo y tráfico actual...', { title: 'Actualizando tráfico', duration: 2500 });
       try {
         await checkTrafficNow(true);
       } finally {
@@ -1157,19 +1364,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         destination: inputDest.value,
         originCoords,
         destinationCoords
-      }, '⇅ Ruta invertida y guardada en tu cuenta');
+      }, {
+        type: 'success',
+        title: 'Ruta invertida',
+        message: 'Origen y destino actualizados en tu cuenta.'
+      });
     });
   }
 
   // Autoguardado inmediato en base de datos al editar campos manualmente
   document.getElementById('input-origin').addEventListener('change', (e) => {
-    saveConfigPartial({ origin: e.target.value }, '💾 Punto de partida guardado');
+    saveConfigPartial({ origin: e.target.value }, {
+      type: 'success',
+      title: 'Origen guardado',
+      message: 'Punto de partida actualizado.'
+    });
   });
   document.getElementById('input-destination').addEventListener('change', (e) => {
-    saveConfigPartial({ destination: e.target.value }, '💾 Destino guardado');
+    saveConfigPartial({ destination: e.target.value }, {
+      type: 'success',
+      title: 'Destino guardado',
+      message: 'Dirección de destino actualizada.'
+    });
   });
   document.getElementById('input-target-time').addEventListener('change', (e) => {
-    saveConfigPartial({ targetArrivalTime: e.target.value }, '💾 Hora de llegada guardada');
+    saveConfigPartial({ targetArrivalTime: e.target.value }, {
+      type: 'success',
+      title: 'Horario guardado',
+      message: 'Hora de llegada objetivo actualizada.'
+    });
   });
 
   // Botón reset diario
@@ -1199,20 +1422,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Botón GPS del mapa
   document.getElementById('btn-map-gps').addEventListener('click', () => {
     if (!navigator.geolocation) {
-      showToast('Tu navegador no soporta geolocalización GPS');
+      Toast.warning('Tu navegador no soporta geolocalización GPS.', { title: 'GPS no disponible' });
       return;
     }
-    showToast('Buscando señal GPS...');
+    Toast.info('Buscando señal GPS...', { title: 'Localizando', duration: 2500 });
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         leafletMap.setView([latitude, longitude], 17);
         setPinOnMap(latitude, longitude);
         await reverseGeocode(latitude, longitude);
-        showToast('📍 Ubicación GPS encontrada');
+        Toast.success('Ubicación GPS encontrada en el mapa.', { title: 'Ubicación lista' });
       },
       (err) => {
-        showToast('No se pudo obtener la ubicación GPS (permiso denegado o sin señal)');
+        Toast.error('No se pudo obtener la ubicación GPS (permiso denegado o sin señal).', { title: 'Error de GPS' });
       },
       { enableHighAccuracy: true, timeout: 8000 }
     );
