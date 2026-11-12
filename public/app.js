@@ -10,6 +10,7 @@ let originCoords = null;
 let destinationCoords = null;
 let isRouteEditorManuallyOpen = false;
 let homeRedirectTimer = null;
+let deferredInstallPrompt = null;
 
 // Estado del modal de mapa
 let leafletMap = null;
@@ -519,7 +520,147 @@ async function handleLogout() {
   }
 }
 
-// --- 2. Inicialización de Service Worker y Web Push ---
+// --- 2. Inicialización de Service Worker, Instalación PWA y Web Push ---
+function isRunningStandalone() {
+  return Boolean(
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
+    window.navigator.standalone === true ||
+    document.referrer.startsWith('android-app://')
+  );
+}
+
+function isIosDevice() {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function updatePwaInstallState(installed) {
+  const badge = document.getElementById('badge-pwa');
+  const badgeText = document.getElementById('badge-pwa-text');
+  const installWrap = document.getElementById('pwa-install-container');
+
+  if (badge && badgeText) {
+    badge.className = 'badge';
+    if (installed) {
+      badge.classList.add('badge-green');
+      badgeText.textContent = 'Aplicación instalada';
+    } else {
+      badge.classList.add('badge-yellow');
+      badgeText.textContent = 'Aplicación sin instalar';
+    }
+  }
+
+  if (installWrap) {
+    installWrap.style.display = installed ? 'none' : 'block';
+  }
+}
+
+async function refreshPwaInstallStatus() {
+  if (isRunningStandalone()) {
+    updatePwaInstallState(true);
+    return;
+  }
+
+  if (deferredInstallPrompt) {
+    updatePwaInstallState(false);
+    return;
+  }
+
+  if ('getInstalledRelatedApps' in navigator) {
+    try {
+      const relatedApps = await navigator.getInstalledRelatedApps();
+      if (Array.isArray(relatedApps) && relatedApps.length > 0) {
+        updatePwaInstallState(true);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  updatePwaInstallState(false);
+}
+
+function openPwaGuideModal(isIos) {
+  const modal = document.getElementById('pwa-ios-modal');
+  const intro = document.getElementById('pwa-guide-intro');
+  const steps = document.getElementById('pwa-guide-steps');
+  if (!modal || !intro || !steps) return;
+
+  if (isIos) {
+    intro.textContent = 'En iPhone o iPad sigue estos 2 pasos en Safari para instalar la aplicación:';
+    steps.innerHTML = `
+      <div class="pwa-guide-step">
+        <span class="material-symbols-outlined pwa-step-icon">ios_share</span>
+        <span>Pulsa el botón <strong>Compartir</strong> en la barra inferior de Safari.</span>
+      </div>
+      <div class="pwa-guide-step">
+        <span class="material-symbols-outlined pwa-step-icon">add_box</span>
+        <span>Elige <strong>Agregar a pantalla de inicio</strong> y toca <strong>Agregar</strong>.</span>
+      </div>`;
+  } else {
+    intro.textContent = 'Si el navegador no mostró el aviso automático, instálala manualmente así:';
+    steps.innerHTML = `
+      <div class="pwa-guide-step">
+        <span class="material-symbols-outlined pwa-step-icon">more_vert</span>
+        <span>Abre el menú de tu navegador en la barra superior o inferior.</span>
+      </div>
+      <div class="pwa-guide-step">
+        <span class="material-symbols-outlined pwa-step-icon">download</span>
+        <span>Pulsa <strong>Instalar aplicación</strong> o <strong>Agregar a pantalla principal</strong>.</span>
+      </div>`;
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closePwaGuideModal() {
+  const modal = document.getElementById('pwa-ios-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function handlePwaInstallClick() {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    if (outcome === 'accepted') {
+      Toast.info('Instalando la aplicación en tu teléfono...', {
+        title: 'Instalación iniciada',
+        duration: 3000
+      });
+    } else {
+      Toast.warning('Puedes intentarlo de nuevo cuando quieras desde este botón.', {
+        title: 'Instalación cancelada'
+      });
+    }
+    return;
+  }
+
+  if (isRunningStandalone()) {
+    updatePwaInstallState(true);
+    Toast.success('Ya estás usando la aplicación instalada.', { title: 'Aplicación instalada' });
+    return;
+  }
+
+  openPwaGuideModal(isIosDevice());
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  updatePwaInstallState(false);
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  updatePwaInstallState(true);
+  closePwaGuideModal();
+  Toast.success('La aplicación se instaló correctamente en tu teléfono.', {
+    title: 'Aplicación instalada'
+  });
+});
+
 async function initServiceWorker() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     updatePushBadge('error', 'Push no soportado');
@@ -1304,6 +1445,13 @@ function initBottomNav() {
 // --- 5. Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
   initBottomNav();
+  await refreshPwaInstallStatus();
+  if (window.matchMedia) {
+    const standaloneMq = window.matchMedia('(display-mode: standalone)');
+    if (standaloneMq.addEventListener) {
+      standaloneMq.addEventListener('change', refreshPwaInstallStatus);
+    }
+  }
   await initServiceWorker();
   await checkAuthStatus();
 
@@ -1346,6 +1494,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Botón activar push
   document.getElementById('btn-enable-push').addEventListener('click', subscribeUserToPush);
+
+  // Botón y modal de instalación PWA
+  const btnInstallPwa = document.getElementById('btn-install-pwa');
+  if (btnInstallPwa) {
+    btnInstallPwa.addEventListener('click', handlePwaInstallClick);
+  }
+  const btnCloseIosModal = document.getElementById('btn-close-ios-modal');
+  if (btnCloseIosModal) {
+    btnCloseIosModal.addEventListener('click', closePwaGuideModal);
+  }
+  const btnOkIosModal = document.getElementById('btn-ok-ios-modal');
+  if (btnOkIosModal) {
+    btnOkIosModal.addEventListener('click', closePwaGuideModal);
+  }
+  const pwaIosModal = document.getElementById('pwa-ios-modal');
+  if (pwaIosModal) {
+    pwaIosModal.addEventListener('click', (e) => {
+      if (e.target.id === 'pwa-ios-modal') {
+        closePwaGuideModal();
+      }
+    });
+  }
 
   // Botón probar notificación
   document.getElementById('btn-test-notification').addEventListener('click', triggerTestNotification);

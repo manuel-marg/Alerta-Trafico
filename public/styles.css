@@ -891,6 +891,49 @@ body {
   width: 100%;
 }
 
+.pwa-install-wrapper {
+  width: 100%;
+}
+
+.pwa-install-btn {
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.28);
+}
+
+.pwa-guide-body {
+  padding: 18px 22px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pwa-guide-intro {
+  font-size: 0.86rem;
+  color: var(--gmaps-text-secondary);
+}
+
+.pwa-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pwa-guide-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--gmaps-surface-variant);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.84rem;
+  color: var(--gmaps-text-primary);
+}
+
+.pwa-step-icon {
+  color: var(--gmaps-blue);
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
 .gmaps-sheet-footer {
   display: flex;
   justify-content: space-between;

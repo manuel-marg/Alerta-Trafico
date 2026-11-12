@@ -59,7 +59,7 @@
       </div>
     </div>
 
-    <!-- Fila inferior de Badges (Push y Modo API) -->
+    <!-- Fila inferior de Badges (Push, Modo API y Estado PWA) -->
     <div class="gmaps-header-badges">
       <span id="badge-push" class="badge badge-yellow">
         <span class="badge-dot"></span>
@@ -68,6 +68,10 @@
       <span id="badge-api" class="badge badge-yellow">
         <span class="badge-dot"></span>
         <span id="badge-api-text">Simulación</span>
+      </span>
+      <span id="badge-pwa" class="badge badge-yellow">
+        <span class="badge-dot"></span>
+        <span id="badge-pwa-text">Aplicación sin instalar</span>
       </span>
     </div>
   </header>
@@ -226,6 +230,14 @@
             Reiniciar alerta diaria
           </button>
         </div>
+      </div>
+
+      <!-- Botón para instalar la PWA en el teléfono (solo si no está instalada) -->
+      <div id="pwa-install-container" class="pwa-install-wrapper" style="display: none;">
+        <button type="button" id="btn-install-pwa" class="gmaps-btn-primary gmaps-btn-full pwa-install-btn">
+          <span class="material-symbols-outlined" style="font-size: 20px;">download</span>
+          Instalar aplicación en el teléfono
+        </button>
       </div>
     </main>
 
@@ -401,6 +413,38 @@
         </button>
         <button type="button" id="btn-confirm-pin" class="gmaps-btn-teal" style="display: inline-flex; align-items: center; gap: 6px;">
           <span class="material-symbols-outlined" style="font-size: 18px;">check</span> Confirmar Ubicación
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Guía de Instalación Manual (iOS Safari / navegadores sin prompt automático) -->
+  <div id="pwa-ios-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card auth-modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img src="/icons/android-chrome-192x192.png" alt="Logo Alerta de Tráfico" class="brand-logo-img" />
+          <div>
+            <h3 class="gmaps-modal-title">Instalar en tu teléfono</h3>
+            <p class="subtitle" style="font-size: 0.76rem;">Acceso directo y alertas como app nativa</p>
+          </div>
+        </div>
+        <button type="button" id="btn-close-ios-modal" class="modal-close-btn" title="Cerrar">&times;</button>
+      </div>
+      <div class="pwa-guide-body">
+        <p id="pwa-guide-intro" class="pwa-guide-intro">Sigue estos 2 pasos rápidos para instalar Alerta de Tráfico:</p>
+        <div id="pwa-guide-steps" class="pwa-guide-steps">
+          <div class="pwa-guide-step">
+            <span class="material-symbols-outlined pwa-step-icon">ios_share</span>
+            <span>Pulsa el botón <strong>Compartir</strong> en la barra inferior de Safari.</span>
+          </div>
+          <div class="pwa-guide-step">
+            <span class="material-symbols-outlined pwa-step-icon">add_box</span>
+            <span>Selecciona <strong>Agregar a pantalla de inicio</strong> y pulsa <strong>Agregar</strong>.</span>
+          </div>
+        </div>
+        <button type="button" id="btn-ok-ios-modal" class="gmaps-btn-primary gmaps-btn-full" style="margin-top: 8px;">
+          Entendido
         </button>
       </div>
     </div>
