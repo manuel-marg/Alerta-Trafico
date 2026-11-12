@@ -1652,11 +1652,14 @@ label {
   .gmaps-stat-chip {
     padding: 8px 4px;
   }
+  .chip-value,
   .stat-chip-val {
-    font-size: 0.95rem;
+    font-size: 0.94rem;
+    white-space: nowrap;
   }
+  .chip-label,
   .stat-chip-lbl {
-    font-size: 0.65rem;
+    font-size: 0.68rem;
   }
   .gmaps-big-time {
     font-size: 2.5rem;

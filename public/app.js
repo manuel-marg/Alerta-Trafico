@@ -323,6 +323,21 @@ const Toast = (() => {
   };
 })();
 
+function formatTime12h(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+    return '--:--';
+  }
+  const [rawH, rawM] = timeStr.split(':');
+  const h = Number(rawH);
+  const m = Number(rawM);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return timeStr;
+
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  const paddedMin = String(m).padStart(2, '0');
+  return `${hour12}:${paddedMin} ${period}`;
+}
+
 // Mostrar Toast (compatible con string u objeto de opciones)
 function showToast(msgOrOpts, type = 'info', extraOpts = {}) {
   if (msgOrOpts && typeof msgOrOpts === 'object') {
@@ -788,7 +803,7 @@ async function saveConfigPartial(payload, customToastMsg = null) {
         document.getElementById('display-destination').textContent = payload.destination || 'Sin configurar';
       }
       if (payload.targetArrivalTime !== undefined) {
-        document.getElementById('stat-arrival-target').textContent = payload.targetArrivalTime || '--:--';
+        document.getElementById('stat-arrival-target').textContent = formatTime12h(payload.targetArrivalTime);
       }
       if (payload.bufferMinutes !== undefined) {
         document.getElementById('stat-buffer').textContent = `${payload.bufferMinutes} min`;
@@ -993,7 +1008,7 @@ async function loadConfig() {
 
     document.getElementById('display-origin').textContent = currentConfig.origin || 'Sin configurar';
     document.getElementById('display-destination').textContent = currentConfig.destination || 'Sin configurar';
-    document.getElementById('stat-arrival-target').textContent = currentConfig.targetArrivalTime || '--:--';
+    document.getElementById('stat-arrival-target').textContent = formatTime12h(currentConfig.targetArrivalTime);
     document.getElementById('stat-buffer').textContent = `${currentConfig.bufferMinutes || 0} min`;
   } catch (err) {
     console.error('Error cargando configuración:', err);
