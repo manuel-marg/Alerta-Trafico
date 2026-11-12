@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/x-icon" href="/icons/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/fonts/fonts.css" />
+  <link rel="stylesheet" href="/admin.css" />
+  <title>Panel Admin • Alerta de Tráfico</title>
+</head>
+<body>
+
+  <!-- Pantalla de Bloqueo / Clave de Acceso -->
+  <section id="admin-login-screen" class="admin-login-wrapper" style="display: none;">
+    <div class="admin-login-card">
+      <div class="login-brand">
+        <img src="/icons/android-chrome-192x192.png" alt="Logo Alerta de Tráfico" class="login-logo" />
+        <span class="login-shield-badge">
+          <span class="material-symbols-outlined">admin_panel_settings</span>
+          Acceso Administrador
+        </span>
+      </div>
+
+      <h1>Panel de Control</h1>
+      <p class="login-subtitle">
+        Ingresa la clave de acceso para supervisar usuarios, consumo de Google Maps API y estado del servidor.
+      </p>
+
+      <form id="admin-login-form" class="login-form">
+        <label for="admin-access-key">Clave de acceso</label>
+        <div class="password-input-wrap">
+          <span class="material-symbols-outlined input-leading-icon">key</span>
+          <input
+            type="password"
+            id="admin-access-key"
+            placeholder="Ingresa tu clave de administrador"
+            autocomplete="current-password"
+            required
+          />
+          <button type="button" id="btn-toggle-key-visibility" class="icon-btn" title="Mostrar u ocultar clave" aria-label="Mostrar u ocultar clave">
+            <span class="material-symbols-outlined">visibility</span>
+          </button>
+        </div>
+
+        <div id="login-error" class="inline-alert inline-alert-error" style="display: none;"></div>
+
+        <button type="submit" id="btn-admin-login" class="btn-primary btn-full">
+          <span class="material-symbols-outlined">lock_open</span>
+          Entrar al Panel
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <a href="/" class="back-link">
+          <span class="material-symbols-outlined">arrow_back</span>
+          Volver a Alerta de Tráfico
+        </a>
+        <span class="login-hint" id="login-key-source-hint"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dashboard Principal de Administración -->
+  <div id="admin-dashboard-screen" class="admin-shell" style="display: none;">
+    <header class="admin-navbar">
+      <div class="admin-navbar-inner">
+        <div class="navbar-brand">
+          <img src="/icons/android-chrome-192x192.png" alt="Logo" class="navbar-logo" />
+          <div>
+            <div class="navbar-title-row">
+              <h1>Panel de Administración</h1>
+              <span class="pill-badge pill-blue">Admin</span>
+            </div>
+            <p class="navbar-subtitle">Alerta de Tráfico • Control de cuotas y usuarios</p>
+          </div>
+        </div>
+
+        <div class="navbar-actions">
+          <span class="last-updated-chip" id="last-updated-label" title="Última actualización">
+            <span class="material-symbols-outlined">schedule</span>
+            <span id="last-updated-time">--:--</span>
+          </span>
+          <button type="button" id="btn-refresh-dashboard" class="btn-tonal" title="Actualizar datos">
+            <span class="material-symbols-outlined" id="refresh-icon">refresh</span>
+            <span class="hide-sm">Actualizar</span>
+          </button>
+          <button type="button" id="btn-open-key-modal" class="btn-outline" title="Cambiar clave de acceso">
+            <span class="material-symbols-outlined">vpn_key</span>
+            <span class="hide-md">Clave</span>
+          </button>
+          <a href="/" class="btn-outline" title="Ir a la aplicación">
+            <span class="material-symbols-outlined">open_in_new</span>
+            <span class="hide-md">App</span>
+          </a>
+          <button type="button" id="btn-admin-logout" class="btn-danger-outline" title="Cerrar sesión de administrador">
+            <span class="material-symbols-outlined">logout</span>
+            <span class="hide-sm">Salir</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-container">
+
+      <!-- Fila 1: KPIs principales -->
+      <section class="kpi-grid">
+        <article class="admin-card kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Usuarios Registrados</span>
+            <span class="kpi-icon kpi-icon-blue">
+              <span class="material-symbols-outlined">group</span>
+            </span>
+          </div>
+          <div class="kpi-value" id="kpi-total-users">0</div>
+          <div class="kpi-meta" id="kpi-users-meta">0 activos • 0 con Push</div>
+        </article>
+
+        <article class="admin-card kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Peticiones Google Hoy</span>
+            <span class="kpi-icon kpi-icon-green">
+              <span class="material-symbols-outlined">today</span>
+            </span>
+          </div>
+          <div class="kpi-value" id="kpi-requests-today">0</div>
+          <div class="kpi-meta" id="kpi-today-meta">Consultas reales hoy</div>
+        </article>
+
+        <article class="admin-card kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Consumo Este Mes</span>
+            <span class="kpi-icon kpi-icon-orange">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </span>
+          </div>
+          <div class="kpi-value" id="kpi-requests-month">0</div>
+          <div class="kpi-progress-wrap">
+            <div class="kpi-progress-bar">
+              <div class="kpi-progress-fill" id="kpi-month-quota-bar" style="width: 0%;"></div>
+            </div>
+            <div class="kpi-meta" id="kpi-month-meta">0% de 10,000 gratis/mes</div>
+          </div>
+        </article>
+
+        <article class="admin-card kpi-card">
+          <div class="kpi-header">
+            <span class="kpi-label">Histórico Total API</span>
+            <span class="kpi-icon kpi-icon-purple">
+              <span class="material-symbols-outlined">analytics</span>
+            </span>
+          </div>
+          <div class="kpi-value" id="kpi-requests-total">0</div>
+          <div class="kpi-meta" id="kpi-total-meta">Routes: 0 • Matrix: 0</div>
+        </article>
+      </section>
+
+      <!-- Fila 2: Gráfica 14 días + Estado del Servidor -->
+      <section class="analytics-grid">
+        <article class="admin-card chart-card">
+          <div class="card-header-row">
+            <div>
+              <h2>Consumo Diario de Google Maps API</h2>
+              <p class="card-subtitle">Peticiones reales enviadas en los últimos 14 días</p>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-dot dot-blue"></span> Exitosas</span>
+              <span class="legend-item"><span class="legend-dot dot-red"></span> Error</span>
+            </div>
+          </div>
+          <div id="daily-chart" class="daily-chart"></div>
+        </article>
+
+        <article class="admin-card system-card">
+          <div class="card-header-row">
+            <div>
+              <h2>Estado del Sistema</h2>
+              <p class="card-subtitle">Recursos y configuración activa</p>
+            </div>
+            <span class="pill-badge pill-green" id="sys-status-pill">En línea</span>
+          </div>
+
+          <div class="sys-metrics-list">
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">memory</span> Memoria Node (RSS)
+              </span>
+              <strong id="sys-memory">-- MB</strong>
+            </div>
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">timer</span> Tiempo Activo
+              </span>
+              <strong id="sys-uptime">--</strong>
+            </div>
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">database</span> Base SQLite
+              </span>
+              <strong id="sys-db-size">-- KB</strong>
+            </div>
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">cached</span> Caché de Rutas
+              </span>
+              <strong id="sys-cache-size">0 rutas</strong>
+            </div>
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">key</span> API Key Maestra
+              </span>
+              <strong id="sys-google-key">--</strong>
+            </div>
+            <div class="sys-metric-row">
+              <span class="sys-metric-label">
+                <span class="material-symbols-outlined">shield</span> Origen Clave Admin
+              </span>
+              <strong id="sys-admin-source">--</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Fila 3: Lista y Consumo por Usuario -->
+      <section class="admin-card users-section">
+        <div class="users-toolbar">
+          <div>
+            <h2>Usuarios y Consumo Individual</h2>
+            <p class="card-subtitle">Supervisa cuántas peticiones hace cada usuario, pausa monitoreos o elimina cuentas</p>
+          </div>
+
+          <div class="toolbar-controls">
+            <div class="search-box">
+              <span class="material-symbols-outlined">search</span>
+              <input type="search" id="user-search-input" placeholder="Buscar nombre, correo o ruta..." />
+            </div>
+
+            <select id="user-sort-select" class="select-control" aria-label="Ordenar usuarios">
+              <option value="month_desc">Mayor consumo (mes)</option>
+              <option value="today_desc">Mayor consumo (hoy)</option>
+              <option value="total_desc">Mayor consumo (total)</option>
+              <option value="newest">Registro más reciente</option>
+              <option value="name_asc">Nombre (A-Z)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filter-pills" id="user-filter-pills">
+          <button type="button" class="filter-pill active" data-filter="all">Todos</button>
+          <button type="button" class="filter-pill" data-filter="active">Activos</button>
+          <button type="button" class="filter-pill" data-filter="paused">Pausados</button>
+          <button type="button" class="filter-pill" data-filter="push">Con Push</button>
+          <button type="button" class="filter-pill" data-filter="consuming">Con consumo</button>
+        </div>
+
+        <div id="users-empty-state" class="empty-state" style="display: none;">
+          <span class="material-symbols-outlined">person_search</span>
+          <p>No se encontraron usuarios con ese criterio.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table class="users-table" id="users-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Ruta y Alarma</th>
+                <th>Peticiones Google API</th>
+                <th>Estado</th>
+                <th class="text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Fila 4: Últimas Peticiones Globales a Google API -->
+      <section class="admin-card logs-section">
+        <div class="card-header-row">
+          <div>
+            <h2>Registro Reciente de Peticiones a Google API</h2>
+            <p class="card-subtitle">Últimas 30 consultas reales enviadas por el servidor (no incluye caché ni simulación)</p>
+          </div>
+          <span class="pill-badge pill-gray" id="recent-logs-count">0 registros</span>
+        </div>
+
+        <div id="recent-logs-empty" class="empty-state" style="display: none;">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <p>Aún no se han registrado peticiones reales a la API de Google.</p>
+        </div>
+
+        <div class="table-responsive">
+          <table class="logs-table" id="recent-logs-table">
+            <thead>
+              <tr>
+                <th>Fecha y Hora</th>
+                <th>Usuario</th>
+                <th>Proveedor</th>
+                <th>Disparador</th>
+                <th>Clave</th>
+                <th>Resultado</th>
+              </tr>
+            </thead>
+            <tbody id="recent-logs-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal: Detalle de Usuario -->
+  <div id="user-detail-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div>
+          <h3 id="detail-user-name">Detalle de Usuario</h3>
+          <p id="detail-user-email" class="modal-subtitle"></p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="user-detail-modal" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body" id="user-detail-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmar Eliminación -->
+  <div id="delete-user-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div class="modal-title-danger">
+          <span class="material-symbols-outlined">warning</span>
+          <h3>Eliminar Usuario</h3>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="delete-user-modal" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning-text">
+          ¿Seguro que deseas eliminar permanentemente al usuario <strong id="delete-target-name"></strong> (<span id="delete-target-email"></span>)?
+        </p>
+        <p class="delete-subwarning">
+          Se borrarán su cuenta, sesiones activas, ruta configurada, suscripciones Web Push y todo su historial de peticiones API. Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-outline" data-close-modal="delete-user-modal">Cancelar</button>
+        <button type="button" id="btn-confirm-delete-user" class="btn-danger">
+          <span class="material-symbols-outlined">delete_forever</span>
+          Sí, eliminar usuario
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cambiar Clave de Administrador -->
+  <div id="change-key-modal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card modal-sm">
+      <div class="modal-header">
+        <div>
+          <h3>Clave de Acceso Admin</h3>
+          <p class="modal-subtitle">Protege el acceso a la ruta /admin</p>
+        </div>
+        <button type="button" class="icon-btn" data-close-modal="change-key-modal" aria-label="Cerrar">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="change-key-env-notice" class="inline-alert inline-alert-info" style="display: none;">
+          La clave actual está definida por la variable de entorno <code>ADMIN_KEY</code> (archivo <code>.env</code>). Edítala allí y reinicia el servidor para cambiarla.
+        </div>
+
+        <form id="change-key-form" class="modal-form">
+          <div class="form-group">
+            <label for="current-admin-key">Clave actual</label>
+            <input type="password" id="current-admin-key" required autocomplete="current-password" />
+          </div>
+          <div class="form-group">
+            <label for="new-admin-key">Nueva clave (mínimo 6 caracteres)</label>
+            <input type="password" id="new-admin-key" minlength="6" required autocomplete="new-password" />
+          </div>
+          <div id="change-key-error" class="inline-alert inline-alert-error" style="display: none;"></div>
+          <div class="modal-footer" style="padding: 12px 0 0 0; border-top: none;">
+            <button type="button" class="btn-outline" data-close-modal="change-key-modal">Cancelar</button>
+            <button type="submit" id="btn-save-new-key" class="btn-primary">Guardar nueva clave</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor de Notificaciones Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

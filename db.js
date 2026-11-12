@@ -64,6 +64,29 @@ function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+
+    CREATE TABLE IF NOT EXISTS admin_sessions (
+      token TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS api_usage_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'cron',
+      success INTEGER NOT NULL DEFAULT 1,
+      status_code INTEGER DEFAULT 200,
+      duration_minutes INTEGER,
+      used_system_key INTEGER NOT NULL DEFAULT 1,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_api_usage_user_created ON api_usage_logs(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_api_usage_created ON api_usage_logs(created_at);
   `);
 
   migrateLegacyDataIfPresent();
@@ -214,13 +237,19 @@ function getUserConfig(userId) {
   const stmt = db.prepare(`SELECT * FROM user_config WHERE user_id = ?`);
   const row = stmt.get(userId);
   if (!row) {
-    db.prepare(`INSERT OR IGNORE INTO user_config (user_id) VALUES (?)`).run(userId);
+    const userExists = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId);
+    if (userExists) {
+      db.prepare(`INSERT OR IGNORE INTO user_config (user_id) VALUES (?)`).run(userId);
+    }
     return { ...defaultConfig };
   }
   return formatUserConfig(row);
 }
 
 function saveUserConfig(userId, newCfg) {
+  const userExists = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId);
+  if (!userExists) return null;
+
   const current = getUserConfig(userId);
   const merged = { ...current, ...newCfg };
 
@@ -364,11 +393,357 @@ function migrateLegacyDataIfPresent() {
   }
 }
 
+// --- Sesiones de Administrador ---
+function createAdminSession(hoursValid = 24) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + hoursValid * 60 * 60 * 1000).toISOString();
+  const token = crypto.randomBytes(32).toString('hex');
+
+  // Limpiar sesiones de admin expiradas para mantener la tabla pequeña
+  db.prepare(`DELETE FROM admin_sessions WHERE expires_at <= ?`).run(now.toISOString());
+
+  db.prepare(`
+    INSERT INTO admin_sessions (token, created_at, expires_at)
+    VALUES (?, ?, ?)
+  `).run(token, now.toISOString(), expiresAt);
+
+  return token;
+}
+
+function verifyAdminSession(token) {
+  if (!token) return false;
+  const nowIso = new Date().toISOString();
+  const row = db.prepare(`
+    SELECT token FROM admin_sessions WHERE token = ? AND expires_at > ?
+  `).get(token, nowIso);
+  return Boolean(row);
+}
+
+function deleteAdminSession(token) {
+  if (!token) return;
+  db.prepare(`DELETE FROM admin_sessions WHERE token = ?`).run(token);
+}
+
+// --- Registro y Métricas de Consumo de Google API ---
+function logApiUsage({
+  userId,
+  provider,
+  source = 'cron',
+  success = true,
+  statusCode = 200,
+  durationMinutes = null,
+  usedSystemKey = true,
+  errorMessage = null
+}) {
+  if (!userId) return;
+  const userExists = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(userId);
+  if (!userExists) return;
+
+  const stmt = db.prepare(`
+    INSERT INTO api_usage_logs (
+      user_id, provider, source, success, status_code,
+      duration_minutes, used_system_key, error_message, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  stmt.run(
+    userId,
+    provider,
+    source,
+    success ? 1 : 0,
+    statusCode != null ? Number(statusCode) : null,
+    durationMinutes != null ? Number(durationMinutes) : null,
+    usedSystemKey ? 1 : 0,
+    errorMessage ? String(errorMessage).slice(0, 240) : null,
+    new Date().toISOString()
+  );
+}
+
+function toLocalDateKey(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function getAdminDashboardData() {
+  const now = new Date();
+  const startOfTodayIso = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+  const startOfMonthIso = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+  const start14DaysDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 13, 0, 0, 0, 0);
+  const start14DaysIso = start14DaysDate.toISOString();
+
+  const userRows = db.prepare(`
+    SELECT
+      u.id,
+      u.email,
+      u.name,
+      u.created_at,
+      uc.origin,
+      uc.destination,
+      uc.origin_coords_json,
+      uc.dest_coords_json,
+      uc.target_arrival_time,
+      uc.buffer_minutes,
+      uc.monitoring_window_minutes,
+      uc.google_maps_api_key,
+      uc.enabled,
+      uc.last_notification_date,
+      uc.last_check_json,
+      (SELECT COUNT(*) FROM subscriptions s WHERE s.user_id = u.id) AS push_count,
+      (SELECT COUNT(*) FROM sessions sess WHERE sess.user_id = u.id AND sess.expires_at > ?) AS active_sessions_count
+    FROM users u
+    LEFT JOIN user_config uc ON uc.user_id = u.id
+    ORDER BY u.created_at DESC
+  `).all(now.toISOString());
+
+  const usageByUserRows = db.prepare(`
+    SELECT
+      user_id,
+      COUNT(*) AS total,
+      SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS today,
+      SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS month,
+      SUM(CASE WHEN source = 'cron' THEN 1 ELSE 0 END) AS cron_total,
+      SUM(CASE WHEN source = 'manual' THEN 1 ELSE 0 END) AS manual_total,
+      SUM(CASE WHEN provider = 'routes_api' THEN 1 ELSE 0 END) AS routes_total,
+      SUM(CASE WHEN provider = 'distance_matrix' THEN 1 ELSE 0 END) AS matrix_total,
+      SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS error_total,
+      SUM(CASE WHEN used_system_key = 1 AND created_at >= ? THEN 1 ELSE 0 END) AS system_key_month,
+      MAX(created_at) AS last_call_at
+    FROM api_usage_logs
+    GROUP BY user_id
+  `).all(startOfTodayIso, startOfMonthIso, startOfMonthIso);
+
+  const usageMap = new Map();
+  for (const row of usageByUserRows) {
+    usageMap.set(row.user_id, row);
+  }
+
+  let activeMonitoringUsers = 0;
+  let usersWithPush = 0;
+  let requestsToday = 0;
+  let requestsMonth = 0;
+  let requestsTotal = 0;
+  let routesApiTotal = 0;
+  let distanceMatrixTotal = 0;
+  let failedRequestsTotal = 0;
+  let systemKeyRequestsMonth = 0;
+
+  const users = userRows.map(row => {
+    const uUsage = usageMap.get(row.id) || {};
+    const today = Number(uUsage.today || 0);
+    const month = Number(uUsage.month || 0);
+    const total = Number(uUsage.total || 0);
+    const cronTotal = Number(uUsage.cron_total || 0);
+    const manualTotal = Number(uUsage.manual_total || 0);
+    const routesTotal = Number(uUsage.routes_total || 0);
+    const matrixTotal = Number(uUsage.matrix_total || 0);
+    const errorTotal = Number(uUsage.error_total || 0);
+    const systemKeyMonth = Number(uUsage.system_key_month || 0);
+
+    const enabled = row.enabled !== null ? Boolean(row.enabled) : true;
+    const pushDevicesCount = Number(row.push_count || 0);
+    const hasOwnApiKey = Boolean(row.google_maps_api_key && row.google_maps_api_key.trim().length > 0);
+    const hasRouteConfigured = Boolean(row.origin_coords_json && row.dest_coords_json);
+
+    let lastCheckTimestamp = null;
+    let lastStatusMessage = null;
+    let lastDurationText = null;
+    if (row.last_check_json) {
+      try {
+        const parsed = JSON.parse(row.last_check_json);
+        lastCheckTimestamp = parsed.timestamp || null;
+        lastStatusMessage = parsed.statusMessage || null;
+        lastDurationText = parsed.trafficResult?.durationText || null;
+      } catch (e) {}
+    }
+
+    if (enabled) activeMonitoringUsers++;
+    if (pushDevicesCount > 0) usersWithPush++;
+
+    requestsToday += today;
+    requestsMonth += month;
+    requestsTotal += total;
+    routesApiTotal += routesTotal;
+    distanceMatrixTotal += matrixTotal;
+    failedRequestsTotal += errorTotal;
+    systemKeyRequestsMonth += systemKeyMonth;
+
+    return {
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      createdAt: row.created_at,
+      enabled,
+      origin: row.origin || 'Mi Casa',
+      destination: row.destination || 'Mi Trabajo',
+      hasRouteConfigured,
+      targetArrivalTime: row.target_arrival_time || '08:00',
+      bufferMinutes: row.buffer_minutes !== null ? Number(row.buffer_minutes) : 10,
+      monitoringWindowMinutes: row.monitoring_window_minutes !== null ? Number(row.monitoring_window_minutes) : 90,
+      hasOwnApiKey,
+      pushDevicesCount,
+      activeSessionsCount: Number(row.active_sessions_count || 0),
+      lastNotificationDate: row.last_notification_date || null,
+      lastCheckTimestamp,
+      lastStatusMessage,
+      lastDurationText,
+      apiUsage: {
+        today,
+        month,
+        total,
+        cronTotal,
+        manualTotal,
+        routesTotal,
+        matrixTotal,
+        errorTotal,
+        systemKeyMonth,
+        lastCallAt: uUsage.last_call_at || null
+      }
+    };
+  });
+
+  // Construir serie de los últimos 14 días en hora local
+  const dailyMap = new Map();
+  for (let i = 0; i < 14; i++) {
+    const d = new Date(start14DaysDate.getFullYear(), start14DaysDate.getMonth(), start14DaysDate.getDate() + i);
+    const key = toLocalDateKey(d);
+    dailyMap.set(key, { date: key, total: 0, success: 0, failed: 0 });
+  }
+
+  const recent14Rows = db.prepare(`
+    SELECT created_at, success
+    FROM api_usage_logs
+    WHERE created_at >= ?
+  `).all(start14DaysIso);
+
+  for (const r of recent14Rows) {
+    const key = toLocalDateKey(new Date(r.created_at));
+    const bucket = dailyMap.get(key);
+    if (bucket) {
+      bucket.total += 1;
+      if (r.success) bucket.success += 1;
+      else bucket.failed += 1;
+    }
+  }
+
+  // Últimas 30 peticiones globales
+  const recentLogs = db.prepare(`
+    SELECT
+      l.id,
+      l.user_id,
+      u.name AS user_name,
+      u.email AS user_email,
+      l.provider,
+      l.source,
+      l.success,
+      l.status_code,
+      l.duration_minutes,
+      l.used_system_key,
+      l.error_message,
+      l.created_at
+    FROM api_usage_logs l
+    JOIN users u ON u.id = l.user_id
+    ORDER BY l.id DESC
+    LIMIT 30
+  `).all().map(r => ({
+    id: r.id,
+    userId: r.user_id,
+    userName: r.user_name,
+    userEmail: r.user_email,
+    provider: r.provider,
+    source: r.source,
+    success: Boolean(r.success),
+    statusCode: r.status_code,
+    durationMinutes: r.duration_minutes,
+    usedSystemKey: Boolean(r.used_system_key),
+    errorMessage: r.error_message,
+    createdAt: r.created_at
+  }));
+
+  return {
+    summary: {
+      totalUsers: users.length,
+      activeMonitoringUsers,
+      pausedUsers: users.length - activeMonitoringUsers,
+      usersWithPush,
+      requestsToday,
+      requestsMonth,
+      requestsTotal,
+      routesApiTotal,
+      distanceMatrixTotal,
+      failedRequestsTotal,
+      systemKeyRequestsMonth
+    },
+    dailyChart: Array.from(dailyMap.values()),
+    users,
+    recentLogs
+  };
+}
+
+function getAdminUserDetails(userId) {
+  const user = getUserById(userId);
+  if (!user) return null;
+
+  const cfg = getUserConfig(userId);
+  const { googleMapsApiKey, ...safeConfig } = cfg;
+  const hasOwnApiKey = Boolean(googleMapsApiKey && googleMapsApiKey.trim());
+  const maskedOwnApiKey = hasOwnApiKey
+    ? googleMapsApiKey.trim().substring(0, 6) + '...' + googleMapsApiKey.trim().slice(-4)
+    : '';
+
+  const pushDevicesCount = db.prepare(`SELECT COUNT(*) AS count FROM subscriptions WHERE user_id = ?`).get(userId).count;
+  const activeSessionsCount = db.prepare(`SELECT COUNT(*) AS count FROM sessions WHERE user_id = ? AND expires_at > ?`).get(userId, new Date().toISOString()).count;
+
+  const logs = db.prepare(`
+    SELECT id, provider, source, success, status_code, duration_minutes, used_system_key, error_message, created_at
+    FROM api_usage_logs
+    WHERE user_id = ?
+    ORDER BY id DESC
+    LIMIT 50
+  `).all(userId).map(r => ({
+    id: r.id,
+    provider: r.provider,
+    source: r.source,
+    success: Boolean(r.success),
+    statusCode: r.status_code,
+    durationMinutes: r.duration_minutes,
+    usedSystemKey: Boolean(r.used_system_key),
+    errorMessage: r.error_message,
+    createdAt: r.created_at
+  }));
+
+  return {
+    user,
+    config: {
+      ...safeConfig,
+      hasOwnApiKey,
+      maskedOwnApiKey
+    },
+    pushDevicesCount,
+    activeSessionsCount,
+    logs
+  };
+}
+
+function setUserEnabled(userId, enabled) {
+  const user = getUserById(userId);
+  if (!user) return null;
+  return saveUserConfig(userId, { enabled: Boolean(enabled) });
+}
+
+function deleteUserById(userId) {
+  const stmt = db.prepare(`DELETE FROM users WHERE id = ?`);
+  const result = stmt.run(userId);
+  return result.changes > 0;
+}
+
 // Inicializar de inmediato al importar
 initDb();
 
 module.exports = {
   db,
+  DB_PATH,
   initDb,
   createUser,
   verifyUser,
@@ -383,5 +758,13 @@ module.exports = {
   addSubscription,
   getUserSubscriptions,
   removeSubscription,
-  removeStaleSubscriptions
+  removeStaleSubscriptions,
+  createAdminSession,
+  verifyAdminSession,
+  deleteAdminSession,
+  logApiUsage,
+  getAdminDashboardData,
+  getAdminUserDetails,
+  setUserEnabled,
+  deleteUserById
 };

@@ -1,6 +1,11 @@
+try {
+  require('dotenv').config({ quiet: true });
+} catch (e) {}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const webpush = require('web-push');
 const db = require('./db');
 
@@ -8,6 +13,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+app.get('/admin', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 app.get('/sw.js', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'sw.js'));
@@ -25,7 +34,49 @@ app.use(express.static(path.join(__dirname, 'public')));
 const DATA_DIR = path.join(__dirname, 'data');
 const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+const ADMIN_FILE = path.join(DATA_DIR, 'admin.json');
 const PUSH_ICON_URL = '/icons/android-chrome-192x192.png';
+
+// Gestión de clave de acceso del panel /admin
+function getAdminKeyInfo(logIfGenerated = false) {
+  if (process.env.ADMIN_KEY && process.env.ADMIN_KEY.trim()) {
+    return { key: process.env.ADMIN_KEY.trim(), source: 'env' };
+  }
+
+  if (fs.existsSync(ADMIN_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(ADMIN_FILE, 'utf8'));
+      if (data && typeof data.adminKey === 'string' && data.adminKey.trim()) {
+        return { key: data.adminKey.trim(), source: 'file' };
+      }
+    } catch (e) {
+      console.error('Error leyendo admin.json, regenerando...', e);
+    }
+  }
+
+  const generatedKey = 'adm-' + crypto.randomBytes(6).toString('hex');
+  try {
+    fs.writeFileSync(
+      ADMIN_FILE,
+      JSON.stringify({ adminKey: generatedKey, updatedAt: new Date().toISOString() }, null, 2),
+      'utf8'
+    );
+    if (logIfGenerated) {
+      console.log(`🔐 [Admin] Clave de acceso generada automáticamente en data/admin.json: ${generatedKey}`);
+    }
+  } catch (e) {
+    console.error('No se pudo guardar data/admin.json:', e.message);
+  }
+  return { key: generatedKey, source: 'file' };
+}
+
+function safeCompareStrings(a, b) {
+  const hashA = crypto.createHash('sha256').update(String(a || '')).digest();
+  const hashB = crypto.createHash('sha256').update(String(b || '')).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
+
+const adminKeyBootstrap = getAdminKeyInfo(true);
 
 // Clave maestra global de Google Maps API (compartida para todos los usuarios registrados)
 function getSystemGoogleMapsApiKey() {
@@ -118,10 +169,46 @@ function authOptional(req, res, next) {
   next();
 }
 
+function getAdminSessionToken(req) {
+  const cookies = parseCookies(req);
+  if (cookies.alerta_admin_session) return cookies.alerta_admin_session;
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    return req.headers.authorization.substring(7).trim();
+  }
+  return null;
+}
+
+function adminRequired(req, res, next) {
+  const token = getAdminSessionToken(req);
+  if (!token || !db.verifyAdminSession(token)) {
+    return res.status(401).json({ error: 'Acceso restringido. Ingresa la clave de administrador.' });
+  }
+  req.adminToken = token;
+  next();
+}
+
+function getClientIp(req) {
+  const cfIp = req.headers['cf-connecting-ip'];
+  if (cfIp && typeof cfIp === 'string') return cfIp.trim();
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded && typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+const adminLoginAttempts = new Map(); // ip -> { count, resetAt }
+
 // --- 3. Servicio de Consulta de Tráfico y Caché Inteligente ---
 const trafficCache = new Map(); // key -> { timestamp, data }
 
-async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = null, destinationCoords = null, forceRefresh = false) {
+async function fetchCommuteTraffic(
+  origin,
+  destination,
+  apiKey,
+  originCoords = null,
+  destinationCoords = null,
+  forceRefresh = false,
+  usageMeta = null
+) {
   const originParam = originCoords ? `${originCoords.lat},${originCoords.lng}` : origin;
   const destParam = destinationCoords ? `${destinationCoords.lat},${destinationCoords.lng}` : destination;
   const cacheKey = `${originParam}->${destParam}`;
@@ -154,6 +241,20 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
     trafficCache.set(cacheKey, { timestamp: now, data: simResult });
     return simResult;
   }
+
+  const recordUsage = (entry) => {
+    if (!usageMeta || !usageMeta.userId) return;
+    try {
+      db.logApiUsage({
+        userId: usageMeta.userId,
+        source: usageMeta.source || 'cron',
+        usedSystemKey: usageMeta.usedSystemKey !== undefined ? usageMeta.usedSystemKey : true,
+        ...entry
+      });
+    } catch (e) {
+      console.error('Error registrando uso de Google API:', e.message);
+    }
+  };
 
   // 1. Intentar con Google Routes API (computeRoutes) con tráfico en vivo
   try {
@@ -192,6 +293,13 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
       const distanceKm = route.distanceMeters ? (route.distanceMeters / 1000).toFixed(1) + ' km' : 'Desconocida';
       const durationText = route.localizedValues?.duration?.text || `${durationMinutes} min`;
 
+      recordUsage({
+        provider: 'routes_api',
+        success: true,
+        statusCode: routesResp.status,
+        durationMinutes
+      });
+
       const liveResult = {
         success: true,
         isSimulation: false,
@@ -209,9 +317,22 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
       trafficCache.set(cacheKey, { timestamp: now, data: liveResult });
       return liveResult;
     } else {
-      console.log(`ℹ️ [Routes API no disponible: ${routesData.error?.message || routesResp.status}]. Probando Distance Matrix...`);
+      const errMsg = routesData.error?.message || `HTTP ${routesResp.status}`;
+      recordUsage({
+        provider: 'routes_api',
+        success: false,
+        statusCode: routesResp.status,
+        errorMessage: errMsg
+      });
+      console.log(`ℹ️ [Routes API no disponible: ${errMsg}]. Probando Distance Matrix...`);
     }
   } catch (errRoutes) {
+    recordUsage({
+      provider: 'routes_api',
+      success: false,
+      statusCode: 0,
+      errorMessage: errRoutes.message
+    });
     console.warn('⚠️ Error consultando Routes API, probando Distance Matrix API:', errRoutes.message);
   }
 
@@ -230,6 +351,13 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
     const data = await resp.json();
 
     if (data.status !== 'OK') {
+      const errMsg = `${data.status} - ${data.error_message || ''}`.trim();
+      recordUsage({
+        provider: 'distance_matrix',
+        success: false,
+        statusCode: resp.status,
+        errorMessage: errMsg
+      });
       return {
         success: false,
         isSimulation: false,
@@ -239,16 +367,30 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
 
     const element = data.rows?.[0]?.elements?.[0];
     if (!element || element.status !== 'OK') {
+      const errMsg = element?.status || 'SIN_ELEMENTO';
+      recordUsage({
+        provider: 'distance_matrix',
+        success: false,
+        statusCode: resp.status,
+        errorMessage: errMsg
+      });
       return {
         success: false,
         isSimulation: false,
-        error: `No se encontró ruta válida: ${element?.status || 'SIN_ELEMENTO'}`
+        error: `No se encontró ruta válida: ${errMsg}`
       };
     }
 
     const durationObj = element.duration_in_traffic || element.duration;
     const durationSeconds = durationObj.value;
     const durationMinutes = Math.ceil(durationSeconds / 60);
+
+    recordUsage({
+      provider: 'distance_matrix',
+      success: true,
+      statusCode: resp.status,
+      durationMinutes
+    });
 
     const liveResult = {
       success: true,
@@ -267,6 +409,12 @@ async function fetchCommuteTraffic(origin, destination, apiKey, originCoords = n
     trafficCache.set(cacheKey, { timestamp: now, data: liveResult });
     return liveResult;
   } catch (err) {
+    recordUsage({
+      provider: 'distance_matrix',
+      success: false,
+      statusCode: 0,
+      errorMessage: err.message
+    });
     return {
       success: false,
       isSimulation: false,
@@ -393,7 +541,8 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     }
   }
 
-  const effectiveApiKey = (config.googleMapsApiKey && config.googleMapsApiKey.trim()) || getSystemGoogleMapsApiKey();
+  const userHasOwnKey = Boolean(config.googleMapsApiKey && config.googleMapsApiKey.trim());
+  const effectiveApiKey = userHasOwnKey ? config.googleMapsApiKey.trim() : getSystemGoogleMapsApiKey();
 
   let trafficResult = null;
   if (shouldQueryApi) {
@@ -403,7 +552,12 @@ async function evaluateUserCommute(userId, forceQuery = false) {
       effectiveApiKey,
       config.originCoords,
       config.destinationCoords,
-      forceQuery
+      forceQuery,
+      {
+        userId,
+        source: forceQuery ? 'manual' : 'cron',
+        usedSystemKey: !userHasOwnKey
+      }
     );
     userLastQueryTimes.set(userId, Date.now());
   } else {
@@ -667,9 +821,198 @@ app.post('/api/reset-today', authRequired, (req, res) => {
   res.json({ success: true, message: 'Estado diario reiniciado para tu cuenta.' });
 });
 
+// --- 8. Rutas del Panel de Administración (/admin) ---
+
+app.get('/api/admin/me', (req, res) => {
+  const token = getAdminSessionToken(req);
+  const authenticated = Boolean(token && db.verifyAdminSession(token));
+  const keyInfo = getAdminKeyInfo(false);
+  res.json({
+    authenticated,
+    keySource: keyInfo.source
+  });
+});
+
+app.post('/api/admin/login', (req, res) => {
+  const ip = getClientIp(req);
+  const now = Date.now();
+  const attempt = adminLoginAttempts.get(ip);
+
+  if (attempt && now < attempt.resetAt && attempt.count >= 8) {
+    const waitMin = Math.ceil((attempt.resetAt - now) / 60000);
+    return res.status(429).json({
+      error: `Demasiados intentos fallidos. Intenta de nuevo en ${waitMin} minuto(s).`
+    });
+  }
+
+  const { accessKey } = req.body || {};
+  if (!accessKey || typeof accessKey !== 'string') {
+    return res.status(400).json({ error: 'Ingresa la clave de acceso.' });
+  }
+
+  const keyInfo = getAdminKeyInfo(false);
+  if (!safeCompareStrings(accessKey.trim(), keyInfo.key)) {
+    const currentCount = attempt && now < attempt.resetAt ? attempt.count + 1 : 1;
+    adminLoginAttempts.set(ip, {
+      count: currentCount,
+      resetAt: attempt && now < attempt.resetAt ? attempt.resetAt : now + 15 * 60 * 1000
+    });
+    return res.status(401).json({ error: 'Clave de acceso incorrecta.' });
+  }
+
+  adminLoginAttempts.delete(ip);
+  const token = db.createAdminSession(24);
+  res.setHeader(
+    'Set-Cookie',
+    `alerta_admin_session=${token}; Path=/; Max-Age=86400; SameSite=Strict; HttpOnly`
+  );
+
+  res.json({
+    success: true,
+    keySource: keyInfo.source,
+    message: 'Acceso concedido al panel de administración.'
+  });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  const token = getAdminSessionToken(req);
+  if (token) {
+    db.deleteAdminSession(token);
+  }
+  res.setHeader('Set-Cookie', 'alerta_admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict; HttpOnly');
+  res.json({ success: true });
+});
+
+app.get('/api/admin/dashboard', adminRequired, (req, res) => {
+  try {
+    const data = db.getAdminDashboardData();
+    const sysKey = getSystemGoogleMapsApiKey();
+    const maskedSystemKey = sysKey
+      ? sysKey.substring(0, 6) + '...' + sysKey.slice(-4)
+      : '';
+
+    let dbSizeKb = 0;
+    try {
+      if (fs.existsSync(db.DB_PATH)) {
+        dbSizeKb = Math.round(fs.statSync(db.DB_PATH).size / 1024);
+      }
+    } catch (e) {}
+
+    const mem = process.memoryUsage();
+    const keyInfo = getAdminKeyInfo(false);
+
+    res.json({
+      success: true,
+      ...data,
+      systemInfo: {
+        uptimeSeconds: Math.round(process.uptime()),
+        memoryRssMb: Number((mem.rss / (1024 * 1024)).toFixed(1)),
+        memoryHeapMb: Number((mem.heapUsed / (1024 * 1024)).toFixed(1)),
+        dbSizeKb,
+        trafficCacheEntries: trafficCache.size,
+        hasSystemApiKey: Boolean(sysKey),
+        maskedSystemKey,
+        adminKeySource: keyInfo.source
+      }
+    });
+  } catch (err) {
+    console.error('Error cargando dashboard admin:', err);
+    res.status(500).json({ error: 'Error obteniendo métricas del sistema.' });
+  }
+});
+
+app.get('/api/admin/users/:id', adminRequired, (req, res) => {
+  const details = db.getAdminUserDetails(req.params.id);
+  if (!details) {
+    return res.status(404).json({ error: 'Usuario no encontrado.' });
+  }
+  res.json({ success: true, ...details });
+});
+
+app.patch('/api/admin/users/:id/status', adminRequired, (req, res) => {
+  const { enabled } = req.body || {};
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'Debes indicar enabled (boolean).' });
+  }
+  const updated = db.setUserEnabled(req.params.id, enabled);
+  if (!updated) {
+    return res.status(404).json({ error: 'Usuario no encontrado.' });
+  }
+  res.json({
+    success: true,
+    enabled: updated.enabled,
+    message: updated.enabled ? 'Monitoreo reactivado.' : 'Monitoreo pausado.'
+  });
+});
+
+app.post('/api/admin/users/:id/test-push', adminRequired, async (req, res) => {
+  const user = db.getUserById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Usuario no encontrado.' });
+  }
+  const result = await sendUserPush(user.id, {
+    title: '🔔 Mensaje de prueba del Administrador',
+    body: `Hola ${user.name}, tus alertas Web Push están funcionando correctamente.`,
+    icon: PUSH_ICON_URL,
+    badge: PUSH_ICON_URL,
+    tag: 'admin-test-push',
+    url: '/'
+  });
+  res.json({
+    success: true,
+    sentTo: result.sent,
+    totalDevices: result.total
+  });
+});
+
+app.delete('/api/admin/users/:id', adminRequired, (req, res) => {
+  const user = db.getUserById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ error: 'Usuario no encontrado.' });
+  }
+  const deleted = db.deleteUserById(req.params.id);
+  if (!deleted) {
+    return res.status(500).json({ error: 'No se pudo eliminar el usuario.' });
+  }
+  userLastQueryTimes.delete(req.params.id);
+  res.json({
+    success: true,
+    message: `Usuario ${user.email} eliminado del sistema.`
+  });
+});
+
+app.post('/api/admin/change-key', adminRequired, (req, res) => {
+  const keyInfo = getAdminKeyInfo(false);
+  if (keyInfo.source === 'env') {
+    return res.status(400).json({
+      error: 'La clave está definida por la variable de entorno ADMIN_KEY. Cámbiala en tu archivo .env o entorno.'
+    });
+  }
+
+  const { currentKey, newKey } = req.body || {};
+  if (!currentKey || !safeCompareStrings(String(currentKey).trim(), keyInfo.key)) {
+    return res.status(401).json({ error: 'La clave actual es incorrecta.' });
+  }
+  if (!newKey || typeof newKey !== 'string' || newKey.trim().length < 6) {
+    return res.status(400).json({ error: 'La nueva clave debe tener al menos 6 caracteres.' });
+  }
+
+  try {
+    fs.writeFileSync(
+      ADMIN_FILE,
+      JSON.stringify({ adminKey: newKey.trim(), updatedAt: new Date().toISOString() }, null, 2),
+      'utf8'
+    );
+    res.json({ success: true, message: 'Clave de administrador actualizada correctamente.' });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo guardar la nueva clave.' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`🚀 Servidor Alerta Tráfico PWA iniciado en el puerto ${PORT}`);
   console.log(`🔗 Abre en tu navegador: http://localhost:${PORT}`);
+  console.log(`🛡️  Panel Admin: http://localhost:${PORT}/admin (origen clave: ${adminKeyBootstrap.source})`);
   console.log(`=======================================================`);
 });
