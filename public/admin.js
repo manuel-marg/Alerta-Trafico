@@ -131,13 +131,6 @@
     state.authenticated = false;
     $('admin-dashboard-screen').style.display = 'none';
     $('admin-login-screen').style.display = 'flex';
-    const hint = $('login-key-source-hint');
-    if (hint) {
-      hint.textContent =
-        state.keySource === 'env'
-          ? 'Clave configurada mediante variable de entorno ADMIN_KEY'
-          : 'Clave configurada en data/admin.json';
-    }
     setTimeout(() => $('admin-access-key')?.focus(), 50);
   }
 
