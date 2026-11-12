@@ -361,9 +361,6 @@ async function checkAuthStatus() {
       currentUser = data.user;
       const initial = (currentUser.name || currentUser.email || 'U').charAt(0).toUpperCase();
 
-      const avatarInitial = document.getElementById('user-avatar-initial');
-      if (avatarInitial) avatarInitial.textContent = initial;
-
       const dropAvatar = document.getElementById('dropdown-avatar-initial');
       if (dropAvatar) dropAvatar.textContent = initial;
 

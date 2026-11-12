@@ -181,24 +181,27 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: #ea4335;
-  color: #ffffff;
-  border: 2px solid #ffffff;
-  box-shadow: 0 1px 4px rgba(60,64,67,0.3);
+  background: var(--gmaps-blue-tonal);
+  color: var(--gmaps-blue);
+  border: 1px solid rgba(26, 115, 232, 0.25);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.14);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
-  font-weight: 600;
   cursor: pointer;
   padding: 0;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   outline: none;
 }
 
+.gmaps-avatar-icon {
+  font-size: 21px;
+}
+
 .gmaps-avatar-btn:hover {
+  background: #d2e3fc;
   transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(60,64,67,0.35);
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.22);
 }
 
 .gmaps-avatar-btn:active {
@@ -232,7 +235,7 @@ body {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: #ea4335;
+  background: var(--gmaps-blue);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -1630,9 +1633,11 @@ label {
     padding: 3px 8px;
   }
   .gmaps-avatar-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 0.88rem;
+    width: 34px;
+    height: 34px;
+  }
+  .gmaps-avatar-icon {
+    font-size: 19px;
   }
   .gmaps-account-dropdown {
     width: calc(100vw - 36px);
