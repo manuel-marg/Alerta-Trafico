@@ -452,7 +452,22 @@ async function sendUserPush(userId, payload) {
   return { sent, total: subscriptions.length };
 }
 
-// --- 5. Cálculo de Horarios Dinámicos ---
+// --- 5. Cálculo de Horarios Dinámicos y Formateo ---
+function formatTime12h(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+    return timeStr || '--:--';
+  }
+  const [rawH, rawM] = timeStr.split(':');
+  const h = Number(rawH);
+  const m = Number(rawM);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return timeStr;
+
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  const paddedMin = String(m).padStart(2, '0');
+  return `${hour12}:${paddedMin} ${period}`;
+}
+
 function getNextTripSchedule(targetArrivalTimeStr, bufferMinutes, durationMinutes, windowMinutes) {
   const now = new Date();
   const [targetH, targetM] = (targetArrivalTimeStr || '08:00').split(':').map(Number);
@@ -606,7 +621,7 @@ async function evaluateUserCommute(userId, forceQuery = false) {
       : 'https://www.google.com/maps';
 
     const notificationBody = [
-      `🎯 Llegada meta: ${config.targetArrivalTime}`,
+      `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}`,
       `⏱️ Duración de ruta: ${trafficResult.durationText}`,
       `🛡️ Margen de seguridad: ${buffer} min`,
       `👉 ¡Sal ahora para llegar puntual!`
@@ -773,7 +788,7 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
     : 'https://www.google.com/maps';
 
   const defaultBody = [
-    `🎯 Llegada meta: ${cfg.targetArrivalTime || '08:00 AM'}`,
+    `🎯 Llegada meta: ${formatTime12h(cfg.targetArrivalTime || '08:00')}`,
     `⏱️ Duración de ruta: 35 min (estimado)`,
     `🛡️ Margen de seguridad: ${cfg.bufferMinutes !== undefined ? cfg.bufferMinutes : 10} min`,
     `👉 ¡Sal ahora para llegar puntual!`
