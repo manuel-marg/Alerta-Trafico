@@ -598,13 +598,32 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   // Disparar alarma si corresponde
   if (schedule.mustLeaveNow && !schedule.isForTomorrow && !alreadyNotifiedToday) {
     console.log(`🚨 [Alerta] Disparando notificación matutina a usuario ${userId}: ${statusMessage}`);
+
+    const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
+    const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : (config.destination || '');
+    const mapsUrl = (originParam && destParam)
+      ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
+      : 'https://www.google.com/maps';
+
+    const notificationBody = [
+      `🎯 Llegada meta: ${config.targetArrivalTime}`,
+      `⏱️ Duración de ruta: ${trafficResult.durationText}`,
+      `🛡️ Margen de seguridad: ${buffer} min`,
+      `👉 ¡Sal ahora para llegar puntual!`
+    ].join('\n');
+
     await sendUserPush(userId, {
-      title: '🚗 ¡Hora de salir hacia tu destino!',
-      body: `El tráfico hoy es de ${trafficResult.durationText} (+${buffer}m de margen). Sal ahora para llegar a las ${config.targetArrivalTime}.`,
+      title: '🚦 ¡Alerta de Salida Matutina!',
+      body: notificationBody,
       icon: PUSH_ICON_URL,
       badge: PUSH_ICON_URL,
       tag: 'commute-alert-today',
-      url: '/'
+      url: '/',
+      mapsUrl,
+      actions: [
+        { action: 'open_maps', title: '🗺️ Abrir Maps' },
+        { action: 'open_app', title: '📱 Ver Detalles' }
+      ]
     });
 
     db.saveUserConfig(userId, { lastNotificationDate: todayStr });
@@ -745,13 +764,33 @@ app.post('/api/unsubscribe', (req, res) => {
 // Enviar notificación de prueba al usuario actual
 app.post('/api/test-notification', authRequired, async (req, res) => {
   const { title, body } = req.body || {};
+  const cfg = db.getUserConfig(req.user.id);
+
+  const originParam = cfg.originCoords ? `${cfg.originCoords.lat},${cfg.originCoords.lng}` : (cfg.origin || '');
+  const destParam = cfg.destinationCoords ? `${cfg.destinationCoords.lat},${cfg.destinationCoords.lng}` : (cfg.destination || '');
+  const mapsUrl = (originParam && destParam)
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
+    : 'https://www.google.com/maps';
+
+  const defaultBody = [
+    `🎯 Llegada meta: ${cfg.targetArrivalTime || '08:00 AM'}`,
+    `⏱️ Duración de ruta: 35 min (estimado)`,
+    `🛡️ Margen de seguridad: ${cfg.bufferMinutes !== undefined ? cfg.bufferMinutes : 10} min`,
+    `👉 ¡Sal ahora para llegar puntual!`
+  ].join('\n');
+
   const result = await sendUserPush(req.user.id, {
-    title: title || '🔔 Prueba de Notificación - Alerta Tráfico',
-    body: body || `¡Hola ${req.user.name}! Las notificaciones Web Push están activas para tu cuenta.`,
+    title: title || '🚦 ¡Alerta de Salida Matutina! (Prueba)',
+    body: body || defaultBody,
     icon: PUSH_ICON_URL,
     badge: PUSH_ICON_URL,
     tag: 'test-notification',
-    url: '/'
+    url: '/',
+    mapsUrl,
+    actions: [
+      { action: 'open_maps', title: '🗺️ Abrir Maps' },
+      { action: 'open_app', title: '📱 Ver Detalles' }
+    ]
   });
 
   res.json({

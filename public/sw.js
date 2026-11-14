@@ -1,6 +1,6 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v21';
+const CACHE_NAME = 'alerta-trafico-v22';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -66,7 +66,7 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = data.title || '🚗 ¡Es hora de salir!';
+  const title = data.title || '🚦 ¡Alerta de Salida Matutina!';
   const options = {
     body: data.body || 'Revisa el tráfico actual para llegar a tiempo.',
     icon: data.icon || '/icons/android-chrome-192x192.png',
@@ -75,10 +75,12 @@ self.addEventListener('push', (event) => {
     renotify: true,
     vibrate: [200, 100, 200, 100, 200],
     data: {
-      url: data.url || '/'
+      url: data.url || '/',
+      mapsUrl: data.mapsUrl || null
     },
-    actions: [
-      { action: 'open_app', title: 'Ver Detalles' }
+    actions: data.actions || [
+      { action: 'open_maps', title: '🗺️ Abrir Maps' },
+      { action: 'open_app', title: '📱 Ver Detalles' }
     ]
   };
 
@@ -87,13 +89,26 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Manejador al hacer click en la notificación
+// Manejador al hacer click en la notificación o sus botones
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+
+  let targetUrl = event.notification.data?.url || '/';
+
+  // Si el usuario presionó la acción de Maps y hay una URL de navegación
+  if (event.action === 'open_maps' && event.notification.data?.mapsUrl) {
+    targetUrl = event.notification.data.mapsUrl;
+  }
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Si la URL es externa (Google Maps), abrirla directamente
+      if (targetUrl.startsWith('http') && !targetUrl.includes(self.location.host)) {
+        if (clients.openWindow) {
+          return clients.openWindow(targetUrl);
+        }
+      }
+
       for (const client of windowClients) {
         if (client.url.includes(targetUrl) && 'focus' in client) {
           return client.focus();

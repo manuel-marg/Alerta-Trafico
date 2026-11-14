@@ -1299,10 +1299,7 @@ async function triggerTestNotification() {
     const resp = await fetch('/api/test-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: '🚗 Prueba de Alerta de Tráfico',
-        body: `¡Hola ${currentUser.name}! Las notificaciones push funcionan en tu dispositivo.`
-      })
+      body: JSON.stringify({})
     });
     const result = await resp.json();
     if (result.sentTo > 0) {
