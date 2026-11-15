@@ -1218,6 +1218,29 @@ function renderDashboard(check) {
         trafficPill.style.color = '#137333';
       }
     }
+
+    const weatherPill = document.getElementById('weather-pill-tag');
+    if (weatherPill) {
+      if (check.weather && check.weather.success) {
+        const w = check.weather;
+        weatherPill.style.display = 'inline-flex';
+        const iconSpan = document.getElementById('weather-icon');
+        const textSpan = document.getElementById('weather-text');
+        if (iconSpan) iconSpan.textContent = w.icon || 'wb_sunny';
+        if (textSpan) {
+          if (w.isRaining) {
+            textSpan.textContent = `${w.temp}°C · Lluvia (${w.rainProb}%)`;
+            weatherPill.className = 'weather-tag-pill weather-rain';
+          } else {
+            textSpan.textContent = `${w.temp}°C · ${w.weatherDesc || 'Despejado'}`;
+            weatherPill.className = 'weather-tag-pill';
+          }
+        }
+        weatherPill.title = `Clima en origen: ${w.textSummary || ''}`;
+      } else {
+        weatherPill.style.display = 'none';
+      }
+    }
   }
 
   if (!schedule) {

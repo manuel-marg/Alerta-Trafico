@@ -160,8 +160,14 @@
             <span class="transport-label">En auto</span>
             <span id="stat-traffic-duration" class="transport-time">-- min</span>
           </div>
-          <div class="traffic-tag-pill" id="traffic-pill-tag">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--gmaps-green);">sensors</span> Tráfico en vivo
+          <div class="transport-pill-group">
+            <div class="weather-tag-pill" id="weather-pill-tag" style="display: none;" title="Clima en tu punto de partida">
+              <span id="weather-icon" class="material-symbols-outlined" style="font-size: 15px;">wb_sunny</span>
+              <span id="weather-text">--°C</span>
+            </div>
+            <div class="traffic-tag-pill" id="traffic-pill-tag">
+              <span class="material-symbols-outlined" style="font-size: 15px; color: var(--gmaps-green);">sensors</span> Tráfico en vivo
+            </div>
           </div>
         </div>
 

@@ -423,6 +423,96 @@ async function fetchCommuteTraffic(
   }
 }
 
+// --- 3.1 Servicio de Clima en Origen con Open-Meteo (Cero costos, sin API key) ---
+const weatherCache = new Map(); // key -> { timestamp, data }
+
+function getWeatherInterpretation(wmoCode) {
+  // Códigos estándar WMO Weather Interpretation (WW)
+  // https://open-meteo.com/en/docs
+  if (wmoCode === 0) return { text: 'Cielo despejado', icon: 'wb_sunny', isRain: false };
+  if ([1, 2, 3].includes(wmoCode)) return { text: 'Parcialmente nublado', icon: 'partly_cloudy_day', isRain: false };
+  if ([45, 48].includes(wmoCode)) return { text: 'Niebla matutina', icon: 'foggy', isRain: false };
+  if ([51, 53, 55].includes(wmoCode)) return { text: 'Llovizna ligera', icon: 'rainy', isRain: true };
+  if ([56, 57].includes(wmoCode)) return { text: 'Llovizna helada', icon: 'weather_mix', isRain: true };
+  if ([61, 63, 65].includes(wmoCode)) return { text: 'Lluvia', icon: 'rainy', isRain: true };
+  if ([66, 67].includes(wmoCode)) return { text: 'Lluvia helada', icon: 'weather_mix', isRain: true };
+  if ([71, 73, 75, 77].includes(wmoCode)) return { text: 'Nevada', icon: 'ac_unit', isRain: true };
+  if ([80, 81, 82].includes(wmoCode)) return { text: 'Chubascos', icon: 'rainy_heavy', isRain: true };
+  if ([85, 86].includes(wmoCode)) return { text: 'Chubascos de nieve', icon: 'ac_unit', isRain: true };
+  if ([95, 96, 99].includes(wmoCode)) return { text: 'Tormenta eléctrica', icon: 'thunderstorm', isRain: true };
+  return { text: 'Nublado', icon: 'cloud', isRain: false };
+}
+
+async function fetchRouteWeather(coords, forceRefresh = false) {
+  if (!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') {
+    return null;
+  }
+
+  const lat = Number(coords.lat.toFixed(2));
+  const lng = Number(coords.lng.toFixed(2));
+  const cacheKey = `${lat},${lng}`;
+  const now = Date.now();
+
+  const cached = weatherCache.get(cacheKey);
+  // Caché de 30 minutos para evitar consultas redundantes
+  if (!forceRefresh && cached && (now - cached.timestamp) < 30 * 60 * 1000) {
+    return { ...cached.data, fromCache: true };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,precipitation,weather_code&hourly=precipitation_probability&timezone=auto&forecast_days=1`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      return cached ? cached.data : null;
+    }
+
+    const json = await res.json();
+    const temp = Math.round(json.current?.temperature_2m ?? 22);
+    const wmoCode = json.current?.weather_code ?? 0;
+    const currentPrecip = json.current?.precipitation ?? 0;
+    const currentHour = new Date().getHours();
+    const hourlyProbs = json.hourly?.precipitation_probability || [];
+    const rainProb = hourlyProbs[currentHour] ?? 0;
+
+    const interp = getWeatherInterpretation(wmoCode);
+    const isRaining = currentPrecip > 0.1 || interp.isRain || rainProb >= 40;
+
+    let textSummary = '';
+    if (currentPrecip > 0.1 || (interp.isRain && rainProb >= 40)) {
+      textSummary = `${interp.text} (${temp}°C, ${rainProb}% lluvia) ☔`;
+    } else if (rainProb >= 40) {
+      textSummary = `${temp}°C · ${rainProb}% prob. de lluvia ☔`;
+    } else {
+      textSummary = `${temp}°C · ${interp.text}`;
+    }
+
+    const weatherData = {
+      success: true,
+      temp,
+      wmoCode,
+      weatherDesc: interp.text,
+      icon: interp.icon,
+      isRaining,
+      rainProb,
+      currentPrecip,
+      textSummary,
+      updatedAt: new Date().toISOString()
+    };
+
+    weatherCache.set(cacheKey, { timestamp: now, data: weatherData });
+    return weatherData;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('⚠️ [Open-Meteo] No se pudo obtener clima (no bloqueante):', err.message);
+    return cached ? cached.data : null;
+  }
+}
+
 // --- 4. Envío de Notificaciones Web Push a un Usuario ---
 async function sendUserPush(userId, payload) {
   const subscriptions = db.getUserSubscriptions(userId);
@@ -639,6 +729,10 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   const finalDuration = trafficResult.success ? trafficResult.durationMinutes : baselineDuration;
   const schedule = getNextTripSchedule(config.targetArrivalTime, buffer, finalDuration, windowMinutes);
 
+  // Clima en vivo en el punto de partida (Open-Meteo)
+  const coordsForWeather = config.originCoords || (trafficResult && trafficResult.originCoords);
+  const weather = await fetchRouteWeather(coordsForWeather, forceQuery);
+
   let notifiedTodayFlag = alreadyNotifiedToday;
   let statusMessage = '';
   if (!trafficResult.success) {
@@ -671,12 +765,17 @@ async function evaluateUserCommute(userId, forceQuery = false) {
       ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
       : 'https://www.google.com/maps';
 
-    const notificationBody = [
+    const notificationLines = [
       `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}`,
-      `⏱️ Duración de ruta: ${trafficResult.durationText}`,
-      `🛡️ Margen de seguridad: ${buffer} min`,
-      `👉 ¡Sal ahora para llegar puntual!`
-    ].join('\n');
+      `⏱️ Duración de ruta: ${trafficResult.durationText}`
+    ];
+    if (weather && weather.textSummary) {
+      notificationLines.push(`🌦️ Clima: ${weather.textSummary}`);
+    }
+    notificationLines.push(`🛡️ Margen de seguridad: ${buffer} min`);
+    notificationLines.push(`👉 ¡Sal ahora para llegar puntual!`);
+
+    const notificationBody = notificationLines.join('\n');
 
     await sendUserPush(userId, {
       title: '🚦 ¡Alerta de Salida Matutina!',
@@ -703,6 +802,7 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     alreadyNotifiedToday: Boolean(notifiedTodayFlag),
     trafficResult,
     schedule,
+    weather,
     statusMessage
   };
 
@@ -845,12 +945,18 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
     : 'https://www.google.com/maps';
 
-  const defaultBody = [
+  const weather = await fetchRouteWeather(cfg.originCoords, true);
+  const bodyLines = [
     `🎯 Llegada meta: ${formatTime12h(cfg.targetArrivalTime || '08:00')}`,
-    `⏱️ Duración de ruta: 35 min (estimado)`,
-    `🛡️ Margen de seguridad: ${cfg.bufferMinutes !== undefined ? cfg.bufferMinutes : 10} min`,
-    `👉 ¡Sal ahora para llegar puntual!`
-  ].join('\n');
+    `⏱️ Duración de ruta: 35 min (estimado)`
+  ];
+  if (weather && weather.textSummary) {
+    bodyLines.push(`🌦️ Clima: ${weather.textSummary}`);
+  }
+  bodyLines.push(`🛡️ Margen de seguridad: ${cfg.bufferMinutes !== undefined ? cfg.bufferMinutes : 10} min`);
+  bodyLines.push(`👉 ¡Sal ahora para llegar puntual!`);
+
+  const defaultBody = bodyLines.join('\n');
 
   const result = await sendUserPush(req.user.id, {
     title: title || '🚦 ¡Alerta de Salida Matutina! (Prueba)',
