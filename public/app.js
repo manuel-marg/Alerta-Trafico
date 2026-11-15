@@ -1237,8 +1237,8 @@ function renderDashboard(check) {
     return `${h}h ${m}m`;
   };
 
-  // Si la alerta de hoy ya fue entregada y todavía no pasa la hora objetivo -> Banner Verde (Success)
-  if (alreadyNotifiedToday && !schedule.isForTomorrow) {
+  // Si la alerta de hoy ya fue entregada y es para hoy -> Banner Verde (Success)
+  if (alreadyNotifiedToday && schedule.isToday) {
     alertBox.className = 'gmaps-alert-banner alert-normal';
     alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-green);">check_circle</span>';
     alertText.textContent = 'Alerta de hoy ya entregada. ¡Buen viaje!';
@@ -1255,6 +1255,19 @@ function renderDashboard(check) {
     bigTime.style.color = 'var(--gmaps-red)';
     countdownText.textContent = `¡Sal de inmediato para llegar a tiempo!`;
     countdownText.style.color = 'var(--gmaps-red)';
+    return;
+  }
+
+  // Si es fin de semana (Viernes post-viaje, Sábado o Domingo) -> Banner Azul Descanso de Fin de Semana
+  if (schedule.isWeekend) {
+    alertBox.className = 'gmaps-alert-banner alert-completed';
+    alertIcon.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-blue);">weekend</span>';
+    alertText.textContent = statusMessage;
+    bigTime.style.color = 'var(--gmaps-blue)';
+    countdownText.textContent = schedule.isForTomorrow
+      ? 'Fin de semana: próximo monitoreo mañana lunes temprano.'
+      : 'Fin de semana: monitoreo pausado hasta el lunes.';
+    countdownText.style.color = 'var(--gmaps-text-secondary)';
     return;
   }
 

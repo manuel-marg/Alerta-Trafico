@@ -468,16 +468,54 @@ function formatTime12h(timeStr) {
   return `${hour12}:${paddedMin} ${period}`;
 }
 
-function getNextTripSchedule(targetArrivalTimeStr, bufferMinutes, durationMinutes, windowMinutes) {
-  const now = new Date();
+function formatDateTo12h(dateObj) {
+  if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return '--:--';
+  const h = dateObj.getHours();
+  const m = dateObj.getMinutes();
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  const paddedMin = String(m).padStart(2, '0');
+  return `${hour12}:${paddedMin} ${period}`;
+}
+
+function getNextTripSchedule(targetArrivalTimeStr, bufferMinutes, durationMinutes, windowMinutes, now = new Date()) {
   const [targetH, targetM] = (targetArrivalTimeStr || '08:00').split(':').map(Number);
   
-  let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetH, targetM, 0, 0);
-  let isForTomorrow = false;
+  const currentDay = now.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+  const isWeekday = currentDay >= 1 && currentDay <= 5;
 
-  if (now.getTime() >= targetDate.getTime()) {
-    targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, targetH, targetM, 0, 0);
-    isForTomorrow = true;
+  let targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), targetH, targetM, 0, 0);
+  let isToday = false;
+  let isForTomorrow = false;
+  let isWeekend = (currentDay === 0 || currentDay === 6);
+
+  if (isWeekday && now.getTime() < targetDate.getTime()) {
+    // Hoy es día laborable (Lunes a Viernes) y aún no ha pasado la hora meta
+    isToday = true;
+    isForTomorrow = false;
+  } else {
+    // Si ya pasó la hora de hoy o hoy es fin de semana, buscamos el próximo día laborable (Lunes a Viernes)
+    let daysToAdd = 1;
+    let candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToAdd, targetH, targetM, 0, 0);
+    while (candidate.getDay() === 0 || candidate.getDay() === 6) {
+      daysToAdd++;
+      candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysToAdd, targetH, targetM, 0, 0);
+    }
+    targetDate = candidate;
+    isToday = false;
+
+    // Verificar si ese próximo día laborable es exactamente mañana
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    isForTomorrow = (
+      targetDate.getFullYear() === tomorrow.getFullYear() &&
+      targetDate.getMonth() === tomorrow.getMonth() &&
+      targetDate.getDate() === tomorrow.getDate()
+    );
+
+    // Si hoy es viernes y ya pasó la hora de viaje, o si hoy es sábado o domingo: estamos en fin de semana
+    if (currentDay === 5 || currentDay === 6 || currentDay === 0) {
+      isWeekend = true;
+    }
   }
 
   const totalTripMinutes = durationMinutes + bufferMinutes;
@@ -489,21 +527,28 @@ function getNextTripSchedule(targetArrivalTimeStr, bufferMinutes, durationMinute
   const msUntilDeparture = departureDate.getTime() - now.getTime();
   const minutesUntilDeparture = Math.round(msUntilDeparture / (1000 * 60));
 
-  // La ventana de monitoreo inteligente vigila desde 'windowMinutes' antes de la salida estimada:
+  // La ventana de monitoreo inteligente vigila desde 'windowMinutes' antes de la salida estimada,
+  // y ÚNICAMENTE puede estar activa si el viaje está programado para HOY (lunes a viernes).
   const effectiveWindowBeforeArrival = Math.max(windowMinutes, totalTripMinutes + windowMinutes);
-  const inWindow = minutesUntilArrival > 0 && minutesUntilArrival <= effectiveWindowBeforeArrival;
-  const mustLeaveNow = inWindow && minutesUntilDeparture <= 0;
+  const inWindow = isToday && minutesUntilArrival > 0 && minutesUntilArrival <= effectiveWindowBeforeArrival;
+  const mustLeaveNow = isToday && inWindow && minutesUntilDeparture <= 0;
+
+  const dayNames = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  const targetDayName = dayNames[targetDate.getDay()];
 
   return {
     targetDate,
     departureDate,
+    isToday,
     isForTomorrow,
+    isWeekend,
+    targetDayName,
     minutesUntilArrival,
     minutesUntilDeparture,
     inWindow,
     mustLeaveNow,
-    departureTimeFormatted: departureDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    targetTimeFormatted: targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    departureTimeFormatted: formatDateTo12h(departureDate),
+    targetTimeFormatted: formatDateTo12h(targetDate)
   };
 }
 
@@ -536,7 +581,7 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   const baselineDuration = cachedData?.durationMinutes || 35;
   const tentativeSchedule = getNextTripSchedule(config.targetArrivalTime, buffer, baselineDuration, windowMinutes);
 
-  const isOutsideWindow = tentativeSchedule.isForTomorrow || !tentativeSchedule.inWindow;
+  const isOutsideWindow = !tentativeSchedule.isToday || !tentativeSchedule.inWindow;
   const alreadyNotifiedToday = config.lastNotificationDate === todayStr;
 
   let shouldQueryApi = false;
@@ -598,20 +643,26 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   let statusMessage = '';
   if (!trafficResult.success) {
     statusMessage = trafficResult.error;
-  } else if (alreadyNotifiedToday && !schedule.isForTomorrow) {
+  } else if (alreadyNotifiedToday && schedule.isToday) {
     statusMessage = 'Alerta de hoy ya entregada. ¡Buen viaje!';
+  } else if (schedule.isWeekend) {
+    if (now.getDay() === 0) {
+      statusMessage = `Descansando el fin de semana. Próxima salida programada para mañana lunes a las ${schedule.departureTimeFormatted}.`;
+    } else {
+      statusMessage = `Descansando el fin de semana. Próxima salida programada para el lunes a las ${schedule.departureTimeFormatted}.`;
+    }
   } else if (schedule.isForTomorrow) {
     statusMessage = `Descansando hasta mañana. Próxima salida programada para las ${schedule.departureTimeFormatted}.`;
   } else if (schedule.mustLeaveNow) {
-    statusMessage = `¡DEBES SALIR YA! Tráfico: ${trafficResult.durationText}. Margen: ${buffer}m. Llegada meta: ${config.targetArrivalTime}.`;
+    statusMessage = `¡DEBES SALIR YA! Tráfico: ${trafficResult.durationText}. Margen: ${buffer}m. Llegada meta: ${formatTime12h(config.targetArrivalTime)}.`;
   } else if (schedule.inWindow) {
     statusMessage = `Monitoreo matutino activo. Faltan ${schedule.minutesUntilDeparture} min para salir.`;
   } else {
     statusMessage = `En espera. Tu salida de hoy está programada para las ${schedule.departureTimeFormatted}.`;
   }
 
-  // Disparar alarma si corresponde
-  if (schedule.mustLeaveNow && !schedule.isForTomorrow && !alreadyNotifiedToday) {
+  // Disparar alarma si corresponde (estrictamente de lunes a viernes en el día actual)
+  if (schedule.isToday && schedule.mustLeaveNow && !alreadyNotifiedToday) {
     console.log(`🚨 [Alerta] Disparando notificación matutina a usuario ${userId}: ${statusMessage}`);
 
     const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
@@ -662,6 +713,13 @@ async function evaluateUserCommute(userId, forceQuery = false) {
 // Bucle Periódico Multiusuario (cada 60 segundos recorre los usuarios activos)
 setInterval(async () => {
   try {
+    const now = new Date();
+    const currentDay = now.getDay();
+    // Fines de semana (0 = Domingo, 6 = Sábado): descanso absoluto, sin consultas automáticas de cron
+    if (currentDay === 0 || currentDay === 6) {
+      return;
+    }
+
     const activeUsers = db.getAllActiveUsersForMonitoring();
     for (const item of activeUsers) {
       await evaluateUserCommute(item.userId, false);
