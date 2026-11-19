@@ -47,7 +47,7 @@ Alerta-Trafico/
 * **Health check:** `curl http://localhost:3000/api/config`
 
 ### Deployment & Synchronization (Android Phone via Termux)
-* **Target Host:** `192.168.1.102` (Port `8022`, User: `u0_a141`)
+* **Target Host:** `192.168.1.210` (Port `8022`, User: `u0_a141`)
 * **Deploy latest code to phone:**
   ```bash
   cd ~/Alerta-Trafico && git pull origin main

@@ -8,7 +8,7 @@ description: Procedural workflow for deploying, updating, and managing the Alert
 This skill provides step-by-step procedures for managing the production environment on the secondary Android phone.
 
 ## Target Machine Specifications
-* **IP:** `192.168.1.102`
+* **IP:** `192.168.1.210`
 * **Port:** `8022`
 * **User:** `u0_a141`
 * **Password:** `24674967`
@@ -26,7 +26,7 @@ import paramiko
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('192.168.1.102', port=8022, username='u0_a141', password='24674967', banner_timeout=30)
+ssh.connect('192.168.1.210', port=8022, username='u0_a141', password='24674967', banner_timeout=30)
 
 commands = [
     # 1. Pull latest changes from main
