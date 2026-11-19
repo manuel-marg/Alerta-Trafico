@@ -59,15 +59,11 @@
       </div>
     </div>
 
-    <!-- Fila inferior de Badges (Push, Modo API y Estado PWA) -->
+    <!-- Fila inferior de Badges (Notificaciones y Estado PWA) -->
     <div class="gmaps-header-badges">
       <span id="badge-push" class="badge badge-yellow">
         <span class="badge-dot"></span>
-        <span id="badge-push-text">Push: Pendiente</span>
-      </span>
-      <span id="badge-api" class="badge badge-yellow">
-        <span class="badge-dot"></span>
-        <span id="badge-api-text">Simulación</span>
+        <span id="badge-push-text">Notificaciones: Pendiente</span>
       </span>
       <span id="badge-pwa" class="badge badge-yellow">
         <span class="badge-dot"></span>
@@ -80,14 +76,14 @@
 
     <!-- Vista 1: Inicio (Ruta y Resumen de Viaje) -->
     <main id="view-home" class="app-view">
-      <!-- Banner Push Estilo Google Maps -->
+      <!-- Banner de Notificaciones Estilo Google Maps -->
       <div id="push-activation-card" class="gmaps-card gmaps-push-banner">
         <div class="gmaps-push-icon">
           <span class="material-symbols-outlined" style="font-size: 32px; color: var(--gmaps-blue);">notifications_active</span>
         </div>
         <div class="push-banner-text">
-          <h3>Activa las alertas matutinas</h3>
-          <p>Google Maps calculará el tráfico antes de que despiertes y te avisará al minuto exacto de salir.</p>
+          <h3>Activa las notificaciones de salida</h3>
+          <p>Te avisaremos al minuto exacto en tu teléfono para que salgas a tiempo y llegues puntual al trabajo.</p>
         </div>
         <button id="btn-enable-push" class="gmaps-btn-primary">
           Activar

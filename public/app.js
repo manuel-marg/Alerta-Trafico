@@ -663,7 +663,7 @@ window.addEventListener('appinstalled', () => {
 
 async function initServiceWorker() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    updatePushBadge('error', 'Push no soportado');
+    updatePushBadge('error', 'No soportado');
     document.getElementById('push-activation-card').style.display = 'none';
     return;
   }
@@ -675,7 +675,7 @@ async function initServiceWorker() {
     await syncPushSubscriptionIfGranted();
   } catch (err) {
     console.error('Error registrando el Service Worker:', err);
-    updatePushBadge('error', 'Error Push');
+    updatePushBadge('error', 'Error al iniciar');
   }
 }
 
@@ -684,7 +684,7 @@ async function syncPushSubscriptionIfGranted() {
   try {
     const subscription = await swRegistration.pushManager.getSubscription();
     if (subscription && Notification.permission === 'granted') {
-      updatePushBadge('active', 'Push Activo');
+      updatePushBadge('active', 'Notificaciones activas');
       document.getElementById('push-activation-card').style.display = 'none';
       if (currentUser) {
         await fetch('/api/subscribe', {
@@ -694,11 +694,11 @@ async function syncPushSubscriptionIfGranted() {
         });
       }
     } else {
-      updatePushBadge('pending', 'Push Inactivo');
+      updatePushBadge('pending', 'Notificaciones inactivas');
       document.getElementById('push-activation-card').style.display = 'flex';
     }
   } catch (e) {
-    console.error('Error sincronizando push:', e);
+    console.error('Error sincronizando suscripción de notificaciones:', e);
   }
 }
 
@@ -725,7 +725,7 @@ async function subscribeUserToPush() {
   }
 
   if (!swRegistration) {
-    Toast.error('El Service Worker aún no está listo. Recarga la página.', { title: 'Push no disponible' });
+    Toast.error('El servicio de alertas aún se está iniciando. Recarga la página.', { title: 'No disponible' });
     return;
   }
 
@@ -733,7 +733,7 @@ async function subscribeUserToPush() {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       Toast.warning('Permiso de notificaciones denegado en el navegador.', { title: 'Permiso denegado' });
-      updatePushBadge('error', 'Permiso Denegado');
+      updatePushBadge('error', 'Permiso denegado');
       return;
     }
 
@@ -752,12 +752,12 @@ async function subscribeUserToPush() {
       body: JSON.stringify(subscription)
     });
 
-    updatePushBadge('active', 'Push Activo');
+    updatePushBadge('active', 'Notificaciones activas');
     document.getElementById('push-activation-card').style.display = 'none';
-    Toast.success('Notificaciones Push activadas para tu cuenta.', { title: 'Alertas activadas' });
+    Toast.success('Notificaciones matutinas activadas correctamente.', { title: 'Alertas activadas' });
   } catch (err) {
     console.error('Error suscribiendo al usuario:', err);
-    Toast.error('No se pudieron activar las notificaciones.', { title: 'Error de Push' });
+    Toast.error('No se pudieron activar las notificaciones.', { title: 'Notificaciones' });
   }
 }
 
@@ -1130,19 +1130,6 @@ async function loadConfig() {
     renderCoordsPreview('destination');
     isRouteEditorManuallyOpen = false;
     renderRouteEditorVisibility();
-
-    const badgeApi = document.getElementById('badge-api');
-    const badgeApiText = document.getElementById('badge-api-text');
-    if (badgeApi && badgeApiText) {
-      badgeApi.className = 'badge';
-      if (currentConfig.hasApiKey) {
-        badgeApi.classList.add('badge-green');
-        badgeApiText.textContent = 'Google Maps Satelital';
-      } else {
-        badgeApi.classList.add('badge-yellow');
-        badgeApiText.textContent = 'Modo Simulación';
-      }
-    }
 
     document.getElementById('display-origin').textContent = currentConfig.origin || 'Sin configurar';
     document.getElementById('display-destination').textContent = currentConfig.destination || 'Sin configurar';

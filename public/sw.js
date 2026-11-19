@@ -1,6 +1,6 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v27';
+const CACHE_NAME = 'alerta-trafico-v28';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
