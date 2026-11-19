@@ -13,6 +13,18 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Evitar almacenamiento en caché persistente de archivos raíz y scripts para actualización inmediata
+app.use((req, res, next) => {
+  const p = req.path;
+  if (p === '/' || p === '/index.html' || p === '/app.js' || p === '/styles.css') {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 app.get('/admin', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
