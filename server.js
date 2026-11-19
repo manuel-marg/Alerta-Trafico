@@ -772,7 +772,6 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     if (weather && weather.textSummary) {
       notificationLines.push(`🌦️ Clima: ${weather.textSummary}`);
     }
-    notificationLines.push(`🛡️ Margen de seguridad: ${buffer} min`);
     notificationLines.push(`👉 ¡Sal ahora para llegar puntual!`);
 
     const notificationBody = notificationLines.join('\n');
@@ -953,7 +952,6 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
   if (weather && weather.textSummary) {
     bodyLines.push(`🌦️ Clima: ${weather.textSummary}`);
   }
-  bodyLines.push(`🛡️ Margen de seguridad: ${cfg.bufferMinutes !== undefined ? cfg.bufferMinutes : 10} min`);
   bodyLines.push(`👉 ¡Sal ahora para llegar puntual!`);
 
   const defaultBody = bodyLines.join('\n');
