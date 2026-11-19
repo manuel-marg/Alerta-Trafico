@@ -245,11 +245,13 @@
     $('kpi-today-meta').textContent = `${formatNumber(s.pausedUsers)} usuario(s) pausado(s)`;
 
     const monthCount = Number(s.requestsMonth || 0);
-    const freeTierLimit = 10000;
-    const pct = Math.min(100, (monthCount / freeTierLimit) * 100);
+    const freeTierLimit = 40000;
+    const billedCalls = Number(s.systemKeyRequestsMonth !== undefined ? s.systemKeyRequestsMonth : monthCount);
+    const pct = Math.min(100, (billedCalls / freeTierLimit) * 100);
+    const estimatedCostUsd = (billedCalls * 0.005).toFixed(2);
     $('kpi-requests-month').textContent = formatNumber(monthCount);
     $('kpi-month-quota-bar').style.width = `${pct.toFixed(1)}%`;
-    $('kpi-month-meta').textContent = `${pct.toFixed(1)}% de 10,000 gratis/mes (${formatNumber(s.systemKeyRequestsMonth)} clave sistema)`;
+    $('kpi-month-meta').textContent = `${pct.toFixed(1)}% de 40,000 gratis/mes (~$${estimatedCostUsd} / $200 USD)`;
 
     $('kpi-requests-total').textContent = formatNumber(s.requestsTotal);
     $('kpi-total-meta').textContent = `Routes: ${formatNumber(s.routesApiTotal)} • Matrix: ${formatNumber(s.distanceMatrixTotal)} • Errores: ${formatNumber(s.failedRequestsTotal)}`;
