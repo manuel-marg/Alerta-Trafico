@@ -613,48 +613,14 @@ body {
   color: var(--gmaps-green);
 }
 
-.transport-pill-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .traffic-tag-pill {
   font-size: 0.74rem;
   font-weight: 500;
   background: var(--gmaps-green-tonal);
   color: var(--gmaps-green-dark);
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 12px;
   border: 1px solid var(--gmaps-green-border);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.weather-tag-pill {
-  font-size: 0.74rem;
-  font-weight: 500;
-  background: var(--gmaps-surface-variant);
-  color: var(--gmaps-text-primary);
-  padding: 3px 9px;
-  border-radius: 12px;
-  border: 1px solid var(--gmaps-border);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.weather-tag-pill.weather-rain {
-  background: rgba(26, 115, 232, 0.12);
-  color: var(--gmaps-blue);
-  border-color: rgba(26, 115, 232, 0.35);
-  font-weight: 600;
 }
 
 /* Alert Banners */
