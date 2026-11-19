@@ -212,6 +212,96 @@ const adminLoginAttempts = new Map(); // ip -> { count, resetAt }
 // --- 3. Servicio de Consulta de Tráfico y Caché Inteligente ---
 const trafficCache = new Map(); // key -> { timestamp, data }
 
+// Decodificador de polilíneas de Google Maps para asociar coordenadas con pasos de la ruta
+function decodePolyline(encoded) {
+  if (!encoded || typeof encoded !== 'string') return [];
+  const points = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+  while (index < len) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
+
+// Limpieza de instrucciones para obtener un nombre de vía o salida legible y conciso
+function extractCleanRoadName(instruction) {
+  if (!instruction) return null;
+  const firstLine = instruction.split('\n')[0].trim();
+  let cleaned = firstLine
+    .replace(/^Mantente a la (?:izquierda|derecha) para continuar por\s+/i, '')
+    .replace(/^(?:Incorpórate a|Continúa por|Gira a la (?:izquierda|derecha) (?:hacia|por)?|Dirígete hacia el [a-z]+ hacia)\s+/i, '')
+    .replace(/^Toma la salida hacia\s+/i, 'Salida ')
+    .replace(/^Gira ligeramente a la (?:derecha|izquierda) para acceder al ramal en dirección\s+/i, 'Ramal ')
+    .trim();
+
+  const parts = cleaned.split('/').map(p => p.trim()).filter(p => !p.match(/^(?:Troncal|Carretera)\s+\d+$/i));
+  if (parts.length > 0) {
+    cleaned = parts.slice(0, 2).join(' / ');
+  }
+  return cleaned || firstLine;
+}
+
+// Detección de tramos con congestión (TRAFFIC_JAM y SLOW) cruzando intervalos con pasos de ruta
+function parseRouteBottlenecks(route) {
+  if (!route) return [];
+  const intervals = route.travelAdvisory?.speedReadingIntervals || [];
+  const steps = route.legs?.[0]?.steps || [];
+  if (!intervals.length || !steps.length) return [];
+
+  let currentOffset = 0;
+  const stepRanges = [];
+  for (let idx = 0; idx < steps.length; idx++) {
+    const s = steps[idx];
+    const pts = s.polyline ? decodePolyline(s.polyline.encodedPolyline) : [];
+    const startIdx = currentOffset;
+    const endIdx = currentOffset + pts.length;
+    stepRanges.push({
+      idx,
+      roadName: extractCleanRoadName(s.navigationInstruction?.instructions),
+      startIdx,
+      endIdx
+    });
+    currentOffset += Math.max(0, pts.length - 1);
+  }
+
+  const bottlenecksMap = new Map();
+  for (const inv of intervals) {
+    if (inv.speed === 'TRAFFIC_JAM' || inv.speed === 'SLOW') {
+      const isJam = inv.speed === 'TRAFFIC_JAM';
+      const severity = isJam ? 'TRAFFIC_JAM' : 'SLOW';
+      const label = isJam ? 'Cola pesada' : 'Tráfico lento';
+      const score = isJam ? 2 : 1;
+      const matching = stepRanges.filter(s => !(inv.endPolylinePointIndex < s.startIdx || inv.startPolylinePointIndex > s.endIdx));
+      for (const m of matching) {
+        if (!m.roadName) continue;
+        const existing = bottlenecksMap.get(m.roadName);
+        if (!existing || score > existing.score) {
+          bottlenecksMap.set(m.roadName, { road: m.roadName, severity, label, score });
+        }
+      }
+    }
+  }
+  return Array.from(bottlenecksMap.values()).sort((a, b) => b.score - a.score);
+}
+
 async function fetchCommuteTraffic(
   origin,
   destination,
@@ -219,7 +309,8 @@ async function fetchCommuteTraffic(
   originCoords = null,
   destinationCoords = null,
   forceRefresh = false,
-  usageMeta = null
+  usageMeta = null,
+  requestDetailedTraffic = false
 ) {
   const originParam = originCoords ? `${originCoords.lat},${originCoords.lng}` : origin;
   const destParam = destinationCoords ? `${destinationCoords.lat},${destinationCoords.lng}` : destination;
@@ -229,7 +320,10 @@ async function fetchCommuteTraffic(
   const cached = trafficCache.get(cacheKey);
   const hasKey = Boolean(apiKey && apiKey.trim());
   if (!forceRefresh && cached && (now - cached.timestamp) < 2 * 60 * 1000 && !(cached.data.isSimulation && hasKey)) {
-    return { ...cached.data, fromCache: true };
+    // Si se requiere tráfico detallado pero la caché solo tiene consulta básica, forzamos la petición a Google
+    if (!requestDetailedTraffic || cached.data.hasDetailedTraffic) {
+      return { ...cached.data, fromCache: true };
+    }
   }
 
   // Si no hay API key o se solicita simulación:
@@ -248,7 +342,9 @@ async function fetchCommuteTraffic(
       durationSeconds,
       durationText: `${durationMinutes} min`,
       distanceText: '18.5 km',
-      trafficSummary: 'Tráfico moderado (Simulado - Configura tu Google Maps API Key para tiempo real)'
+      trafficSummary: 'Tráfico moderado (Simulado - Configura tu Google Maps API Key para tiempo real)',
+      bottlenecks: [],
+      hasDetailedTraffic: false
     };
     trafficCache.set(cacheKey, { timestamp: now, data: simResult });
     return simResult;
@@ -279,21 +375,30 @@ async function fetchCommuteTraffic(
       ? { location: { latLng: { latitude: destinationCoords.lat, longitude: destinationCoords.lng } } }
       : { address: destination };
 
-    console.log(`🌐 [Google Routes API] Consultando tráfico en vivo: ${originParam} ➔ ${destParam}`);
+    const fieldMask = requestDetailedTraffic
+      ? 'routes.duration,routes.distanceMeters,routes.localizedValues,routes.description,routes.polyline.encodedPolyline,routes.legs.steps.navigationInstruction,routes.legs.steps.polyline.encodedPolyline,routes.travelAdvisory.speedReadingIntervals'
+      : 'routes.duration,routes.distanceMeters,routes.localizedValues,routes.description';
+
+    const requestPayload = {
+      origin: originPayload,
+      destination: destinationPayload,
+      travelMode: 'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE'
+    };
+    if (requestDetailedTraffic) {
+      requestPayload.extraComputations = ['TRAFFIC_ON_POLYLINE'];
+    }
+
+    console.log(`🌐 [Google Routes API (${requestDetailedTraffic ? 'Enterprise Detallado' : 'Essentials Básico'})] Consultando tráfico en vivo: ${originParam} ➔ ${destParam}`);
     
     const routesResp = await fetch(routesUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey.trim(),
-        'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters,routes.localizedValues,routes.description'
+        'X-Goog-FieldMask': fieldMask
       },
-      body: JSON.stringify({
-        origin: originPayload,
-        destination: destinationPayload,
-        travelMode: 'DRIVE',
-        routingPreference: 'TRAFFIC_AWARE'
-      })
+      body: JSON.stringify(requestPayload)
     });
 
     const routesData = await routesResp.json();
@@ -305,8 +410,14 @@ async function fetchCommuteTraffic(
       const distanceKm = route.distanceMeters ? (route.distanceMeters / 1000).toFixed(1) + ' km' : 'Desconocida';
       const durationText = route.localizedValues?.duration?.text || `${durationMinutes} min`;
 
+      let bottlenecks = [];
+      if (requestDetailedTraffic) {
+        bottlenecks = parseRouteBottlenecks(route);
+        console.log(`🔍 [Routes API] Tramos con retención detectados (${bottlenecks.length}):`, bottlenecks.map(b => `${b.road} [${b.label}]`).join(', '));
+      }
+
       recordUsage({
-        provider: 'routes_api',
+        provider: requestDetailedTraffic ? 'routes_api_enterprise' : 'routes_api',
         success: true,
         statusCode: routesResp.status,
         durationMinutes
@@ -323,7 +434,9 @@ async function fetchCommuteTraffic(
         durationSeconds,
         durationText,
         distanceText: route.localizedValues?.distance?.text || distanceKm,
-        trafficSummary: 'Tráfico en vivo (Google Routes API)'
+        trafficSummary: 'Tráfico en vivo (Google Routes API)',
+        bottlenecks,
+        hasDetailedTraffic: Boolean(requestDetailedTraffic)
       };
 
       trafficCache.set(cacheKey, { timestamp: now, data: liveResult });
@@ -331,7 +444,7 @@ async function fetchCommuteTraffic(
     } else {
       const errMsg = routesData.error?.message || `HTTP ${routesResp.status}`;
       recordUsage({
-        provider: 'routes_api',
+        provider: requestDetailedTraffic ? 'routes_api_enterprise' : 'routes_api',
         success: false,
         statusCode: routesResp.status,
         errorMessage: errMsg
@@ -771,6 +884,32 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   if (schedule.isToday && schedule.mustLeaveNow && !alreadyNotifiedToday) {
     console.log(`🚨 [Alerta] Disparando notificación matutina a usuario ${userId}: ${statusMessage}`);
 
+    // Modelo Híbrido: Ejecutar 1 ÚNICA petición Enterprise para obtener los tramos en rojo justo antes de enviar la Push
+    if (effectiveApiKey && (!trafficResult.bottlenecks || trafficResult.bottlenecks.length === 0)) {
+      try {
+        console.log(`🔍 [Alerta Híbrida] Consultando desglose detallado de cola en ruta para usuario ${userId}...`);
+        const detailedResult = await fetchCommuteTraffic(
+          config.origin,
+          config.destination,
+          effectiveApiKey,
+          config.originCoords,
+          config.destinationCoords,
+          true,
+          {
+            userId,
+            source: 'cron',
+            usedSystemKey: !userHasOwnKey
+          },
+          true // requestDetailedTraffic: true (Enterprise)
+        );
+        if (detailedResult && detailedResult.success) {
+          trafficResult = detailedResult;
+        }
+      } catch (errDetailed) {
+        console.warn('⚠️ No se pudo obtener desglose detallado de ruta, enviando con tráfico general:', errDetailed.message);
+      }
+    }
+
     const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
     const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : (config.destination || '');
     const mapsUrl = (originParam && destParam)
@@ -781,6 +920,14 @@ async function evaluateUserCommute(userId, forceQuery = false) {
       `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}`,
       `⏱️ Duración de ruta: ${trafficResult.durationText}`
     ];
+
+    if (trafficResult.bottlenecks && trafficResult.bottlenecks.length > 0) {
+      notificationLines.push(`⚠️ Tráfico pesado en:`);
+      trafficResult.bottlenecks.slice(0, 2).forEach(b => {
+        notificationLines.push(` • ${b.road} (${b.label})`);
+      });
+    }
+
     if (weather && weather.textSummary) {
       notificationLines.push(`🌦️ Clima: ${weather.textSummary}`);
     }
@@ -956,11 +1103,45 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
     : 'https://www.google.com/maps';
 
+  const userHasOwnKey = Boolean(cfg.googleMapsApiKey && cfg.googleMapsApiKey.trim());
+  const effectiveApiKey = userHasOwnKey ? cfg.googleMapsApiKey.trim() : getSystemGoogleMapsApiKey();
+
+  let trafficResult = null;
+  if (effectiveApiKey && cfg.originCoords && cfg.destinationCoords) {
+    try {
+      trafficResult = await fetchCommuteTraffic(
+        cfg.origin,
+        cfg.destination,
+        effectiveApiKey,
+        cfg.originCoords,
+        cfg.destinationCoords,
+        true, // forceRefresh
+        {
+          userId: req.user.id,
+          source: 'manual',
+          usedSystemKey: !userHasOwnKey
+        },
+        true // requestDetailedTraffic: true (Enterprise)
+      );
+    } catch (e) {
+      console.warn('Error obteniendo tráfico detallado para test-notification:', e.message);
+    }
+  }
+
   const weather = await fetchRouteWeather(cfg.originCoords, true);
+  const durationText = trafficResult?.durationText || '35 min (estimado)';
   const bodyLines = [
     `🎯 Llegada meta: ${formatTime12h(cfg.targetArrivalTime || '08:00')}`,
-    `⏱️ Duración de ruta: 35 min (estimado)`
+    `⏱️ Duración de ruta: ${durationText}`
   ];
+
+  if (trafficResult?.bottlenecks && trafficResult.bottlenecks.length > 0) {
+    bodyLines.push(`⚠️ Tráfico pesado en:`);
+    trafficResult.bottlenecks.slice(0, 2).forEach(b => {
+      bodyLines.push(` • ${b.road} (${b.label})`);
+    });
+  }
+
   if (weather && weather.textSummary) {
     bodyLines.push(`🌦️ Clima: ${weather.textSummary}`);
   }

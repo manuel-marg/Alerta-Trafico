@@ -505,7 +505,7 @@ function getAdminDashboardData() {
       SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS month,
       SUM(CASE WHEN source = 'cron' THEN 1 ELSE 0 END) AS cron_total,
       SUM(CASE WHEN source = 'manual' THEN 1 ELSE 0 END) AS manual_total,
-      SUM(CASE WHEN provider = 'routes_api' THEN 1 ELSE 0 END) AS routes_total,
+      SUM(CASE WHEN provider LIKE 'routes_api%' THEN 1 ELSE 0 END) AS routes_total,
       SUM(CASE WHEN provider = 'distance_matrix' THEN 1 ELSE 0 END) AS matrix_total,
       SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) AS error_total,
       SUM(CASE WHEN used_system_key = 1 AND created_at >= ? THEN 1 ELSE 0 END) AS system_key_month,
