@@ -786,6 +786,8 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     statusMessage = `En espera. Tu salida de hoy está programada para las ${schedule.departureTimeFormatted}.`;
   }
 
+  let activeAlert = null;
+
   // Disparar alarma si corresponde (estrictamente de lunes a viernes en el día actual)
   if (schedule.isToday && schedule.mustLeaveNow && !alreadyNotifiedToday) {
     console.log(`🚨 [Alerta] Disparando notificación matutina a usuario ${userId}: ${statusMessage}`);
@@ -882,52 +884,53 @@ async function evaluateUserCommute(userId, forceQuery = false) {
   }
 
   // Determinar si hay una alerta activa válida en el lapso entre la hora de salida y la hora de llegada
-  let activeAlert = null;
-  const existingActiveAlert = config.lastCheck?.activeAlert;
+  if (!activeAlert) {
+    const existingActiveAlert = config.lastCheck?.activeAlert;
 
-  if (schedule.isToday && (schedule.mustLeaveNow || notifiedTodayFlag) && schedule.minutesUntilArrival >= 0) {
-    if (existingActiveAlert && !existingActiveAlert.isTest) {
-      activeAlert = {
-        ...existingActiveAlert,
-        durationText: trafficResult.durationText || existingActiveAlert.durationText,
-        bottlenecks: (trafficResult.bottlenecks && trafficResult.bottlenecks.length > 0)
-          ? trafficResult.bottlenecks
-          : (existingActiveAlert.bottlenecks || [])
-      };
-    } else {
-      const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
-      const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : (config.destination || '');
-      const mapsUrl = (originParam && destParam)
-        ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
-        : 'https://www.google.com/maps';
+    if (schedule.isToday && (schedule.mustLeaveNow || notifiedTodayFlag) && schedule.minutesUntilArrival >= 0) {
+      if (existingActiveAlert && !existingActiveAlert.isTest) {
+        activeAlert = {
+          ...existingActiveAlert,
+          durationText: trafficResult.durationText || existingActiveAlert.durationText,
+          bottlenecks: (trafficResult.bottlenecks && trafficResult.bottlenecks.length > 0)
+            ? trafficResult.bottlenecks
+            : (existingActiveAlert.bottlenecks || [])
+        };
+      } else {
+        const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
+        const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : (config.destination || '');
+        const mapsUrl = (originParam && destParam)
+          ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
+          : 'https://www.google.com/maps';
 
-      activeAlert = {
-        id: `commute-${todayStr}`,
-        isTest: false,
-        date: todayStr,
-        triggeredAt: new Date().toISOString(),
-        targetArrivalTime: formatTime12h(config.targetArrivalTime),
-        targetArrivalTimeRaw: config.targetArrivalTime,
-        departureTimeFormatted: schedule.departureTimeFormatted,
-        durationText: trafficResult.durationText,
-        durationMinutes: finalDuration,
-        distanceText: trafficResult.distanceText || '',
-        bottlenecks: trafficResult.bottlenecks || [],
-        trafficSummary: trafficResult.trafficSummary || '',
-        statusMessage: `¡DEBES SALIR YA! Sal ahora para llegar a tiempo a las ${formatTime12h(config.targetArrivalTime)}.`,
-        origin: trafficResult.origin || config.origin,
-        destination: trafficResult.destination || config.destination,
-        mapsUrl,
-        notificationTitle: '🚦 ¡Alerta de Salida Matutina!',
-        notificationBody: `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}\n⏱️ Duración de ruta: ${trafficResult.durationText}\n👉 ¡Sal ahora para llegar puntual!`,
-        expiresAt: schedule.targetDate.toISOString()
-      };
-    }
-  } else if (existingActiveAlert && existingActiveAlert.isTest) {
-    // Si es alerta de prueba y aún no ha expirado su tiempo de demostración (15 min)
-    const expiresMs = new Date(existingActiveAlert.expiresAt).getTime();
-    if (!isNaN(expiresMs) && Date.now() < expiresMs) {
-      activeAlert = existingActiveAlert;
+        activeAlert = {
+          id: `commute-${todayStr}`,
+          isTest: false,
+          date: todayStr,
+          triggeredAt: new Date().toISOString(),
+          targetArrivalTime: formatTime12h(config.targetArrivalTime),
+          targetArrivalTimeRaw: config.targetArrivalTime,
+          departureTimeFormatted: schedule.departureTimeFormatted,
+          durationText: trafficResult.durationText,
+          durationMinutes: finalDuration,
+          distanceText: trafficResult.distanceText || '',
+          bottlenecks: trafficResult.bottlenecks || [],
+          trafficSummary: trafficResult.trafficSummary || '',
+          statusMessage: `¡DEBES SALIR YA! Sal ahora para llegar a tiempo a las ${formatTime12h(config.targetArrivalTime)}.`,
+          origin: trafficResult.origin || config.origin,
+          destination: trafficResult.destination || config.destination,
+          mapsUrl,
+          notificationTitle: '🚦 ¡Alerta de Salida Matutina!',
+          notificationBody: `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}\n⏱️ Duración de ruta: ${trafficResult.durationText}\n👉 ¡Sal ahora para llegar puntual!`,
+          expiresAt: schedule.targetDate.toISOString()
+        };
+      }
+    } else if (existingActiveAlert && existingActiveAlert.isTest) {
+      // Si es alerta de prueba y aún no ha expirado su tiempo de demostración (15 min)
+      const expiresMs = new Date(existingActiveAlert.expiresAt).getTime();
+      if (!isNaN(expiresMs) && Date.now() < expiresMs) {
+        activeAlert = existingActiveAlert;
+      }
     }
   }
 
