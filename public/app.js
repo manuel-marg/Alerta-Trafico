@@ -4,6 +4,8 @@ let swRegistration = null;
 let currentConfig = null;
 let lastCheckData = null;
 let currentUser = null;
+let currentActiveAlert = null;
+let shouldAutoOpenCommuteModal = false;
 
 // Coordenadas guardadas
 let originCoords = null;
@@ -1162,8 +1164,148 @@ async function checkTrafficNow(force = false) {
   }
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function handleActiveCommuteAlert(activeAlert) {
+  const pill = document.getElementById('commute-active-alert-pill');
+  if (!pill) return;
+
+  if (!activeAlert) {
+    currentActiveAlert = null;
+    pill.style.display = 'none';
+    const modal = document.getElementById('commute-alert-modal');
+    if (modal && modal.style.display === 'flex' && !modal.dataset.stayOpen) {
+      modal.style.display = 'none';
+    }
+    return;
+  }
+
+  currentActiveAlert = activeAlert;
+
+  // Actualizar textos de la píldora persistente en la pantalla de Inicio
+  const titleEl = document.getElementById('active-pill-title');
+  const descEl = document.getElementById('active-pill-desc');
+  if (titleEl) {
+    titleEl.textContent = `🚨 Salida matutina requerida (${activeAlert.departureTimeFormatted || 'Ahora'})`;
+  }
+  if (descEl) {
+    const arr = activeAlert.targetArrivalTime || '--:--';
+    const dur = activeAlert.durationText || '';
+    descEl.textContent = `Llegada: ${arr} • ${dur} de viaje • Toca para ver reporte`;
+  }
+  pill.style.display = 'flex';
+
+  // Verificar si el usuario ya descartó esta alerta específica en esta sesión
+  const dismissedKey = 'dismissed_commute_alert_' + activeAlert.id;
+  const isDismissed = sessionStorage.getItem(dismissedKey);
+
+  if (!isDismissed || shouldAutoOpenCommuteModal) {
+    showCommuteAlertModal(activeAlert);
+    shouldAutoOpenCommuteModal = false;
+  }
+}
+
+function showCommuteAlertModal(alertData) {
+  if (!alertData) return;
+  currentActiveAlert = alertData;
+
+  const modal = document.getElementById('commute-alert-modal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('commute-modal-title');
+  const headingEl = document.getElementById('commute-urgent-heading');
+  const subEl = document.getElementById('commute-urgent-sub');
+  const arrivalEl = document.getElementById('commute-metric-arrival');
+  const departureEl = document.getElementById('commute-metric-departure');
+  const durationEl = document.getElementById('commute-metric-duration');
+  const bottlenecksEl = document.getElementById('commute-bottlenecks-list');
+  const originEl = document.getElementById('commute-route-origin');
+  const destEl = document.getElementById('commute-route-dest');
+  const btnMaps = document.getElementById('commute-btn-maps');
+
+  if (titleEl) {
+    titleEl.textContent = alertData.notificationTitle || '¡Alerta de Salida Matutina!';
+  }
+  if (headingEl) {
+    headingEl.textContent = '👉 ¡Sal ahora para llegar a tiempo!';
+  }
+  if (subEl) {
+    if (alertData.departureTimeFormatted && alertData.targetArrivalTime) {
+      subEl.textContent = `Debes partir a las ${alertData.departureTimeFormatted} para alcanzar tu meta de las ${alertData.targetArrivalTime}.`;
+    } else {
+      subEl.textContent = 'Para evitar retrasos en el tráfico y llegar puntual, sal en este momento.';
+    }
+  }
+
+  if (arrivalEl) arrivalEl.textContent = alertData.targetArrivalTime || '--:--';
+  if (departureEl) departureEl.textContent = alertData.departureTimeFormatted || '--:--';
+  if (durationEl) durationEl.textContent = alertData.durationText || '-- min';
+
+  if (bottlenecksEl) {
+    bottlenecksEl.innerHTML = '';
+    const bList = alertData.bottlenecks;
+    if (Array.isArray(bList) && bList.length > 0) {
+      bList.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'bottleneck-item';
+        const isJam = b.severity === 'TRAFFIC_JAM';
+        const iconColor = isJam ? 'var(--gmaps-red)' : 'var(--gmaps-orange)';
+        const badgeClass = isJam ? 'badge-heavy-jam' : 'badge-slow-traffic';
+        const label = b.label || (isJam ? 'Cola pesada' : 'Tráfico lento');
+
+        item.innerHTML = `
+          <span class="bottleneck-road" title="${escapeHtml(b.road)}">
+            <span class="material-symbols-outlined" style="font-size: 16px; color: ${iconColor};">traffic</span>
+            ${escapeHtml(b.road)}
+          </span>
+          <span class="bottleneck-badge ${badgeClass}">${escapeHtml(label)}</span>
+        `;
+        bottlenecksEl.appendChild(item);
+      });
+    } else {
+      const clearItem = document.createElement('div');
+      clearItem.className = 'bottlenecks-clear';
+      const summaryText = alertData.trafficSummary || 'Tráfico fluido en la ruta principal. ¡Buen viaje!';
+      clearItem.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 18px;">check_circle</span>
+        <span>${escapeHtml(summaryText)}</span>
+      `;
+      bottlenecksEl.appendChild(clearItem);
+    }
+  }
+
+  if (originEl) originEl.textContent = alertData.origin || currentConfig?.origin || 'Mi Casa';
+  if (destEl) destEl.textContent = alertData.destination || currentConfig?.destination || 'Mi Trabajo';
+
+  if (btnMaps) {
+    btnMaps.href = alertData.mapsUrl || 'https://www.google.com/maps';
+  }
+
+  modal.style.display = 'flex';
+}
+
+function closeCommuteAlertModal() {
+  const modal = document.getElementById('commute-alert-modal');
+  if (modal) modal.style.display = 'none';
+
+  if (currentActiveAlert && currentActiveAlert.id) {
+    sessionStorage.setItem('dismissed_commute_alert_' + currentActiveAlert.id, '1');
+  }
+}
+
 function renderDashboard(check) {
   if (!check) return;
+
+  // Manejo de la alerta flotante y píldora persistente de viaje matutino en curso
+  handleActiveCommuteAlert(check.activeAlert);
 
   const { trafficResult, schedule, statusMessage, pendingConfig, alreadyNotifiedToday } = check;
 
@@ -1441,6 +1583,31 @@ function initBottomNav() {
 
 // --- 5. Event Listeners ---
 document.addEventListener('DOMContentLoaded', async () => {
+  // Detección de parámetro de apertura directa desde notificación push
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('commuteAlert') === '1') {
+    shouldAutoOpenCommuteModal = true;
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+
+  // Escuchar mensajes del Service Worker cuando el usuario pulsa una notificación en segundo plano
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'COMMUTE_ALERT_OPEN') {
+        switchView('home');
+        if (event.data.alertData) {
+          showCommuteAlertModal(event.data.alertData);
+        } else {
+          checkTrafficNow(true).then(() => {
+            if (lastCheckData?.activeAlert) {
+              showCommuteAlertModal(lastCheckData.activeAlert);
+            }
+          });
+        }
+      }
+    });
+  }
+
   initBottomNav();
   await refreshPwaInstallStatus();
   if (window.matchMedia) {
@@ -1654,6 +1821,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Formulario configuración
   document.getElementById('config-form').addEventListener('submit', handleConfigSubmit);
+
+  // Acciones y eventos del Modal Flotante de Alerta de Salida Matutina
+  const btnAcceptCommute = document.getElementById('commute-btn-accept');
+  if (btnAcceptCommute) {
+    btnAcceptCommute.addEventListener('click', closeCommuteAlertModal);
+  }
+
+  const btnCloseCommute = document.getElementById('btn-close-commute-modal');
+  if (btnCloseCommute) {
+    btnCloseCommute.addEventListener('click', closeCommuteAlertModal);
+  }
+
+  const btnMapsCommute = document.getElementById('commute-btn-maps');
+  if (btnMapsCommute) {
+    btnMapsCommute.addEventListener('click', () => {
+      closeCommuteAlertModal();
+    });
+  }
+
+  const btnReopenCommute = document.getElementById('btn-reopen-commute-modal');
+  if (btnReopenCommute) {
+    btnReopenCommute.addEventListener('click', () => {
+      if (currentActiveAlert) {
+        showCommuteAlertModal(currentActiveAlert);
+      } else {
+        checkTrafficNow(true);
+      }
+    });
+  }
+
+  const commuteModalOverlay = document.getElementById('commute-alert-modal');
+  if (commuteModalOverlay) {
+    commuteModalOverlay.addEventListener('click', (e) => {
+      if (e.target.id === 'commute-alert-modal') {
+        closeCommuteAlertModal();
+      }
+    });
+  }
 
   // Chequeo periódico cada 30 segundos
   setInterval(() => {

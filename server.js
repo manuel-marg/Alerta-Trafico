@@ -838,14 +838,37 @@ async function evaluateUserCommute(userId, forceQuery = false) {
 
     const notificationBody = notificationLines.join('\n');
 
+    const activeAlertData = {
+      id: `commute-${todayStr}-${Date.now()}`,
+      isTest: false,
+      date: todayStr,
+      triggeredAt: new Date().toISOString(),
+      targetArrivalTime: formatTime12h(config.targetArrivalTime),
+      targetArrivalTimeRaw: config.targetArrivalTime,
+      departureTimeFormatted: schedule.departureTimeFormatted,
+      durationText: trafficResult.durationText,
+      durationMinutes: trafficResult.durationMinutes,
+      distanceText: trafficResult.distanceText || '',
+      bottlenecks: trafficResult.bottlenecks || [],
+      trafficSummary: trafficResult.trafficSummary || '',
+      statusMessage: `¡DEBES SALIR YA! Sal ahora para llegar a tiempo a las ${formatTime12h(config.targetArrivalTime)}.`,
+      origin: trafficResult.origin || config.origin,
+      destination: trafficResult.destination || config.destination,
+      mapsUrl,
+      notificationTitle: '🚦 ¡Alerta de Salida Matutina!',
+      notificationBody,
+      expiresAt: schedule.targetDate.toISOString()
+    };
+
     await sendUserPush(userId, {
       title: '🚦 ¡Alerta de Salida Matutina!',
       body: notificationBody,
       icon: PUSH_ICON_URL,
       badge: PUSH_ICON_URL,
       tag: 'commute-alert-today',
-      url: '/',
+      url: '/?commuteAlert=1',
       mapsUrl,
+      alertData: activeAlertData,
       actions: [
         { action: 'open_maps', title: '🗺️ Abrir Maps' },
         { action: 'open_app', title: '📱 Ver Detalles' }
@@ -855,6 +878,57 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     db.saveUserConfig(userId, { lastNotificationDate: todayStr });
     notifiedTodayFlag = true;
     statusMessage = 'Alerta de hoy ya entregada. ¡Buen viaje!';
+    activeAlert = activeAlertData;
+  }
+
+  // Determinar si hay una alerta activa válida en el lapso entre la hora de salida y la hora de llegada
+  let activeAlert = null;
+  const existingActiveAlert = config.lastCheck?.activeAlert;
+
+  if (schedule.isToday && (schedule.mustLeaveNow || notifiedTodayFlag) && schedule.minutesUntilArrival >= 0) {
+    if (existingActiveAlert && !existingActiveAlert.isTest) {
+      activeAlert = {
+        ...existingActiveAlert,
+        durationText: trafficResult.durationText || existingActiveAlert.durationText,
+        bottlenecks: (trafficResult.bottlenecks && trafficResult.bottlenecks.length > 0)
+          ? trafficResult.bottlenecks
+          : (existingActiveAlert.bottlenecks || [])
+      };
+    } else {
+      const originParam = config.originCoords ? `${config.originCoords.lat},${config.originCoords.lng}` : (config.origin || '');
+      const destParam = config.destinationCoords ? `${config.destinationCoords.lat},${config.destinationCoords.lng}` : (config.destination || '');
+      const mapsUrl = (originParam && destParam)
+        ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${encodeURIComponent(destParam)}&travelmode=driving`
+        : 'https://www.google.com/maps';
+
+      activeAlert = {
+        id: `commute-${todayStr}`,
+        isTest: false,
+        date: todayStr,
+        triggeredAt: new Date().toISOString(),
+        targetArrivalTime: formatTime12h(config.targetArrivalTime),
+        targetArrivalTimeRaw: config.targetArrivalTime,
+        departureTimeFormatted: schedule.departureTimeFormatted,
+        durationText: trafficResult.durationText,
+        durationMinutes: finalDuration,
+        distanceText: trafficResult.distanceText || '',
+        bottlenecks: trafficResult.bottlenecks || [],
+        trafficSummary: trafficResult.trafficSummary || '',
+        statusMessage: `¡DEBES SALIR YA! Sal ahora para llegar a tiempo a las ${formatTime12h(config.targetArrivalTime)}.`,
+        origin: trafficResult.origin || config.origin,
+        destination: trafficResult.destination || config.destination,
+        mapsUrl,
+        notificationTitle: '🚦 ¡Alerta de Salida Matutina!',
+        notificationBody: `🎯 Llegada meta: ${formatTime12h(config.targetArrivalTime)}\n⏱️ Duración de ruta: ${trafficResult.durationText}\n👉 ¡Sal ahora para llegar puntual!`,
+        expiresAt: schedule.targetDate.toISOString()
+      };
+    }
+  } else if (existingActiveAlert && existingActiveAlert.isTest) {
+    // Si es alerta de prueba y aún no ha expirado su tiempo de demostración (15 min)
+    const expiresMs = new Date(existingActiveAlert.expiresAt).getTime();
+    if (!isNaN(expiresMs) && Date.now() < expiresMs) {
+      activeAlert = existingActiveAlert;
+    }
   }
 
   const lastCheck = {
@@ -863,7 +937,8 @@ async function evaluateUserCommute(userId, forceQuery = false) {
     alreadyNotifiedToday: Boolean(notifiedTodayFlag),
     trafficResult,
     schedule,
-    statusMessage
+    statusMessage,
+    activeAlert
   };
 
   db.saveUserConfig(userId, { lastCheck });
@@ -1047,14 +1122,51 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
 
   const defaultBody = bodyLines.join('\n');
 
+  const now = new Date();
+  const testActiveAlert = {
+    id: `test-${Date.now()}`,
+    isTest: true,
+    date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+    triggeredAt: now.toISOString(),
+    targetArrivalTime: formatTime12h(cfg.targetArrivalTime || '08:00'),
+    targetArrivalTimeRaw: cfg.targetArrivalTime || '08:00',
+    departureTimeFormatted: formatTime12h(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`),
+    durationText: durationText,
+    durationMinutes: trafficResult?.durationMinutes || 35,
+    distanceText: trafficResult?.distanceText || '18.5 km',
+    bottlenecks: (trafficResult?.bottlenecks && trafficResult.bottlenecks.length > 0)
+      ? trafficResult.bottlenecks
+      : [
+          { road: 'Av. Principal (Ejemplo de prueba)', severity: 'TRAFFIC_JAM', label: 'Cola pesada', score: 2 },
+          { road: 'Autopista (Ejemplo de prueba)', severity: 'SLOW', label: 'Tráfico lento', score: 1 }
+        ],
+    trafficSummary: trafficResult?.trafficSummary || 'Tráfico simulado para prueba de alerta',
+    statusMessage: `¡DEBES SALIR YA! Sal ahora para llegar a tiempo a las ${formatTime12h(cfg.targetArrivalTime || '08:00')}.`,
+    origin: cfg.origin || 'Mi Casa',
+    destination: cfg.destination || 'Mi Trabajo',
+    mapsUrl,
+    notificationTitle: title || '🚦 ¡Alerta de Salida Matutina! (Prueba)',
+    notificationBody: defaultBody,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 minutos activo para pruebas
+  };
+
+  const prevCheck = cfg.lastCheck || {};
+  db.saveUserConfig(req.user.id, {
+    lastCheck: {
+      ...prevCheck,
+      activeAlert: testActiveAlert
+    }
+  });
+
   const result = await sendUserPush(req.user.id, {
     title: title || '🚦 ¡Alerta de Salida Matutina! (Prueba)',
     body: body || defaultBody,
     icon: PUSH_ICON_URL,
     badge: PUSH_ICON_URL,
     tag: 'test-notification',
-    url: '/',
+    url: '/?commuteAlert=1',
     mapsUrl,
+    alertData: testActiveAlert,
     actions: [
       { action: 'open_maps', title: '🗺️ Abrir Maps' },
       { action: 'open_app', title: '📱 Ver Detalles' }
@@ -1064,7 +1176,8 @@ app.post('/api/test-notification', authRequired, async (req, res) => {
   res.json({
     success: true,
     sentTo: result.sent,
-    totalDevices: result.total
+    totalDevices: result.total,
+    activeAlert: testActiveAlert
   });
 });
 
@@ -1124,7 +1237,16 @@ app.get('/api/traffic-check', authRequired, async (req, res) => {
 
 // Resetear estado de alerta de hoy para el usuario
 app.post('/api/reset-today', authRequired, (req, res) => {
-  db.saveUserConfig(req.user.id, { lastNotificationDate: null });
+  const cfg = db.getUserConfig(req.user.id);
+  const prevCheck = cfg.lastCheck || {};
+  db.saveUserConfig(req.user.id, {
+    lastNotificationDate: null,
+    lastCheck: {
+      ...prevCheck,
+      alreadyNotifiedToday: false,
+      activeAlert: null
+    }
+  });
   res.json({ success: true, message: 'Estado diario reiniciado para tu cuenta.' });
 });
 

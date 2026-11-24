@@ -17,7 +17,7 @@
   <!-- Leaflet.js -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <link rel="stylesheet" href="/styles.css?v=29" />
+  <link rel="stylesheet" href="/styles.css?v=30" />
   <title>Alerta de Tráfico - Google Maps Commute</title>
 </head>
 <body>
@@ -141,6 +141,20 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- Píldora persistente de Alerta de Salida Matutina Activa -->
+      <div id="commute-active-alert-pill" class="commute-active-pill" style="display: none;">
+        <div class="active-pill-left">
+          <span class="pulse-dot-red"></span>
+          <div class="active-pill-info">
+            <strong id="active-pill-title">🚨 Alerta matutina en curso</strong>
+            <span id="active-pill-desc">Salida requerida calculada • Toca para ver reporte</span>
+          </div>
+        </div>
+        <button type="button" id="btn-reopen-commute-modal" class="active-pill-action">
+          Ver reporte
+        </button>
       </div>
 
       <!-- Google Maps Bottom Sheet Card: Resumen de Viaje y Estado en Vivo -->
@@ -446,6 +460,93 @@
     </div>
   </div>
 
+  <!-- Modal Flotante de Alerta de Salida Matutina (Google Maps / Material 3) -->
+  <div id="commute-alert-modal" class="modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="commute-modal-title">
+    <div class="modal-card commute-alert-card">
+      <div class="commute-modal-header">
+        <div class="commute-modal-title-group">
+          <div class="commute-alert-pulse-badge">
+            <span class="material-symbols-outlined commute-alert-icon">notifications_active</span>
+          </div>
+          <div>
+            <h3 id="commute-modal-title" class="commute-alert-title">¡Alerta de Salida Matutina!</h3>
+            <p class="commute-alert-subtitle">Reporte de tráfico en tiempo real</p>
+          </div>
+        </div>
+        <button type="button" id="btn-close-commute-modal" class="modal-close-btn" title="Cerrar" aria-label="Cerrar">&times;</button>
+      </div>
+
+      <div class="commute-modal-body">
+        <!-- Banner urgente de salida -->
+        <div class="commute-urgent-banner">
+          <div class="urgent-banner-icon">
+            <span class="material-symbols-outlined" style="font-size: 24px;">directions_run</span>
+          </div>
+          <div class="urgent-banner-content">
+            <strong class="urgent-banner-heading" id="commute-urgent-heading">👉 ¡Sal ahora para llegar a tiempo!</strong>
+            <p class="urgent-banner-sub" id="commute-urgent-sub">Para no llegar tarde a tu destino, debes partir en este momento.</p>
+          </div>
+        </div>
+
+        <!-- Métricas clave en 3 columnas -->
+        <div class="commute-metrics-grid">
+          <div class="commute-metric-card">
+            <span class="metric-label">
+              <span class="material-symbols-outlined" style="font-size: 15px;">flag</span> Llegada meta
+            </span>
+            <strong class="metric-value" id="commute-metric-arrival">--:--</strong>
+          </div>
+          <div class="commute-metric-card metric-urgent">
+            <span class="metric-label">
+              <span class="material-symbols-outlined" style="font-size: 15px;">alarm</span> Salida necesaria
+            </span>
+            <strong class="metric-value" id="commute-metric-departure">--:--</strong>
+          </div>
+          <div class="commute-metric-card">
+            <span class="metric-label">
+              <span class="material-symbols-outlined" style="font-size: 15px;">schedule</span> Duración estimada
+            </span>
+            <strong class="metric-value" id="commute-metric-duration">-- min</strong>
+          </div>
+        </div>
+
+        <!-- Sección de reporte de tráfico y tramos pesados -->
+        <div class="commute-traffic-box">
+          <div class="traffic-box-header">
+            <span class="material-symbols-outlined" style="font-size: 18px; color: var(--gmaps-red);">traffic</span>
+            <span class="traffic-box-title">Estado y retenciones del tráfico:</span>
+          </div>
+          <div id="commute-bottlenecks-list" class="commute-bottlenecks-list">
+            <!-- Inyectado dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Puntos de la ruta -->
+        <div class="commute-route-box">
+          <div class="commute-route-item">
+            <span class="preview-dot blue-dot"></span>
+            <span id="commute-route-origin" class="commute-route-text">Mi Casa</span>
+          </div>
+          <span class="material-symbols-outlined commute-route-sep">arrow_forward</span>
+          <div class="commute-route-item">
+            <span class="preview-dot red-dot"></span>
+            <span id="commute-route-dest" class="commute-route-text">Mi Trabajo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Acciones del modal flotante -->
+      <div class="commute-modal-actions">
+        <a id="commute-btn-maps" href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer" class="gmaps-btn-primary commute-action-btn commute-btn-maps">
+          <span class="material-symbols-outlined" style="font-size: 18px;">navigation</span> Iniciar en Google Maps
+        </a>
+        <button type="button" id="commute-btn-accept" class="gmaps-btn-tonal commute-action-btn">
+          <span class="material-symbols-outlined" style="font-size: 18px;">check</span> Aceptar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Barra de Navegación Inferior Fija (Bottom Nav estilo uiCookies / Google Maps) -->
   <nav class="bnav" id="bottom-nav" aria-label="Navegación principal">
     <button type="button" class="bnav-tab active" id="tab-nav-home" aria-current="page" title="Inicio">
@@ -463,6 +564,6 @@
     </button>
   </nav>
 
-  <script src="/app.js?v=29"></script>
+  <script src="/app.js?v=30"></script>
 </body>
 </html>

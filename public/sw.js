@@ -1,6 +1,6 @@
 // Service Worker para Alerta de Tráfico PWA
 
-const CACHE_NAME = 'alerta-trafico-v29';
+const CACHE_NAME = 'alerta-trafico-v30';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -75,8 +75,11 @@ self.addEventListener('push', (event) => {
     renotify: true,
     vibrate: [200, 100, 200, 100, 200],
     data: {
-      url: data.url || '/',
-      mapsUrl: data.mapsUrl || null
+      url: data.url || '/?commuteAlert=1',
+      mapsUrl: data.mapsUrl || null,
+      alertData: data.alertData || null,
+      pushTitle: title,
+      pushBody: data.body || ''
     },
     actions: data.actions || [
       { action: 'open_maps', title: '🗺️ Abrir Maps' },
@@ -93,7 +96,10 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  let targetUrl = event.notification.data?.url || '/';
+  let targetUrl = event.notification.data?.url || '/?commuteAlert=1';
+  if (!targetUrl.includes('commuteAlert=')) {
+    targetUrl += (targetUrl.includes('?') ? '&' : '?') + 'commuteAlert=1';
+  }
 
   // Si el usuario presionó la acción de Maps y hay una URL de navegación
   if (event.action === 'open_maps' && event.notification.data?.mapsUrl) {
@@ -109,11 +115,24 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
 
+      // Si ya hay una ventana abierta de la app, enfocarla y enviarle mensaje para abrir el modal flotante
       for (const client of windowClients) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
-          return client.focus();
+        if ('focus' in client) {
+          client.focus();
+          if (client.postMessage) {
+            client.postMessage({
+              type: 'COMMUTE_ALERT_OPEN',
+              alertData: event.notification.data?.alertData,
+              notificationTitle: event.notification.data?.pushTitle,
+              notificationBody: event.notification.data?.pushBody,
+              mapsUrl: event.notification.data?.mapsUrl
+            });
+          }
+          return;
         }
       }
+
+      // Si no había ventana abierta, abrir la app con el parámetro ?commuteAlert=1
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
