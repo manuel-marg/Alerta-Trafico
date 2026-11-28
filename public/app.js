@@ -1038,11 +1038,10 @@ const BUFFER_HINTS = {
 };
 
 const WINDOW_HINTS = {
-  5: 'El sistema revisará el tráfico en tiempo real 5 minutos antes de tu hora de salida estimada.',
-  10: 'El sistema revisará el tráfico en tiempo real 10 minutos antes de tu hora de salida estimada.',
-  15: 'Sondeo activo de Google Maps comenzando 15 minutos antes de la partida estimada.',
   30: 'Sondeo adaptativo inteligente vigilando el tráfico desde 30 minutos antes de salir.',
-  60: 'Vigilancia continua y adaptativa desde 1 hora antes para detectar atascos tempranos.'
+  60: 'Vigilancia continua y adaptativa desde 1 hora antes para detectar atascos tempranos.',
+  90: 'Monitoreo anticipado desde 1 hora y media antes para rutas largas o tráfico impredecible.',
+  120: 'Cobertura máxima desde 2 horas antes para vigilar congestiones severas desde temprano.'
 };
 
 function setupSegmentedControl(containerId, hiddenInputId, badgeId, hintId, hintsMap, configFieldKey = null) {
@@ -1122,7 +1121,7 @@ async function loadConfig() {
     document.getElementById('input-target-time').value = currentConfig.targetArrivalTime || '08:00';
 
     const savedBuffer = currentConfig.bufferMinutes !== undefined ? currentConfig.bufferMinutes : 10;
-    const savedWindow = currentConfig.monitoringWindowMinutes || 30;
+    const savedWindow = currentConfig.monitoringWindowMinutes || 60;
     setSegmentedValue('control-buffer', 'input-buffer', 'buffer-val-badge', 'buffer-hint-text', savedBuffer, BUFFER_HINTS);
     setSegmentedValue('control-window', 'input-window', 'window-val-badge', 'window-hint-text', savedWindow, WINDOW_HINTS);
 
